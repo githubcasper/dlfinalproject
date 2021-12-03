@@ -45,16 +45,15 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
     train_sampler = SubsetRandomSampler(train_indices)
     val_sampler = SubsetRandomSampler(val_indices)
 
-    test_loader = torch.utils.data.DataLoader(dataset,
-                                              batch_size=batch_size,
-                                              sampler=test_sampler)
 
     train_loader = torch.utils.data.DataLoader(dataset,
                                                batch_size=batch_size,
                                                sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(dataset,
-                                             batch_size=batch_size,
                                              sampler=val_sampler)
+
+    test_loader = torch.utils.data.DataLoader(dataset,
+                                              sampler=test_sampler)
 
     return train_loader, val_loader, test_loader
