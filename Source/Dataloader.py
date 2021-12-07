@@ -7,6 +7,7 @@ import torch
 class NewsDataset(Dataset):
     def __init__(self, json_path):
         self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]
+        self.df['category'] = self.df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})
 
     def __len__(self):
         return len(self.df)
@@ -26,7 +27,6 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
     random_seed = random_seed
     data_path = '../Data/News_Category_Dataset_v2.json'
     df = pd.read_json(data_path, lines=True)
-
 
     amount_of_data = len(df)
     dataset = NewsDataset(data_path)
@@ -54,6 +54,5 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
 
     test_loader = torch.utils.data.DataLoader(dataset,
                                               sampler=test_sampler)
-
 
     return train_loader, val_loader, test_loader

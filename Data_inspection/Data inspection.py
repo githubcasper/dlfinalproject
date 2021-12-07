@@ -1,11 +1,12 @@
 import numpy as np
 import pandas as pd
+import re
 
-df = pd.read_json('../News_Category_Dataset_v2.json', lines=True)
+df = pd.read_json('../Data/News_Category_Dataset_v2.json', lines=True)
 pd.set_option('display.max_columns', 100)
 df = df.drop(df[df['headline'] == ""].index) #removing rows with empty headline
-
-print(df.head())
+df['category'] = df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})
+#print(df.head())
 
 amount_of_data = len(df)
 amount_of_labels = len(set(df['category']))

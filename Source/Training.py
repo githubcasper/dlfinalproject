@@ -5,9 +5,9 @@ Created on Tue Nov 30 13:07:56 2021
 @author: Andreas Tind
 """
 
-from Dataloader import get_loaders
-import neptune.new as neptune
-import keyring
+from Source.Dataloader import get_loaders
+#import neptune.new as neptune
+#import keyring+
 #import os
 #from pathlib import Path as PL
 
@@ -51,56 +51,48 @@ train_loader, val_loader, test_loader = get_loaders(batch_size=2,
                                                     shuffle_dataset=True, 
                                                     random_seed=123)
 
-train_iter = iter(train_loader)
-next(train_iter)
+#train_iter = iter(train_loader)
+#next(train_iter)
 
 
 #%% Most recent chunk
 
-def train_iters(train_loader):
-    
-    model.train()
-    total_acc, total_count = 0, 0
-    log_interval = 500
-    start_time = time.time()
+class LSTMModel(nn.Module):
 
-    for idx, (label, text) in enumerate(train_loader):
-        optimizer.zero_grad()
-        predicted_label = model(text)
-        loss = criterion(predicted_label, label)
-        loss.backward()
-#        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
-        optimizer.step()
+    def __init__(self, vocab_size, embed_dim, dropout, num_hidden_layers, size_hidden_layer, num_classes=40):
+        super(LSTMModel, self).__init__()
+        self.size_embed = embed_dim
+        self.size_hidden_layer = size_hidden_layer
+        self.num_hidden_layers = num_hidden_layers
+        self.dropout_p = dropout
 
-        total_acc += (predicted_label.argmax(1) == label).sum().item()
-        total_count += label.size(0)
+        self.embedding = nn.Embedding(vocab_size, self.size_embed, sparse=True)
 
-        if idx % log_interval == 0 and idx > 0:
-            elapsed = time.time() - start_time
-            print('| epoch {:3d} | {:5d}/{:5d} batches '
-                  '| accuracy {:8.3f}'.format(epoch, idx, len(train_loader),
-                                              total_acc/total_count))
-            total_acc, total_count = 0, 0
-            start_time = time.time()
-            
+        self.rnn = nn.LSTM(input_size=self.size_embed,
+                           hidden_size=self.size_hidden_layer,
+                           num_layers=self.num_hidden_layers,
+                           bidirectional=True)
 
-class TextClassificationModel(nn.Module):
-
-    def __init__(self, vocab_size, embed_dim, num_class):
-        super(TextClassificationModel, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embed_dim, sparse=True)
-        self.fc = nn.Linear(embed_dim, num_class)
+        self.out = nn.Linear(self.size_hidden_layer, num_classes)
+        self.dropout = nn.Dropout(p=self.dropout_p)
         self.init_weights()
 
     def init_weights(self):
         initrange = 0.5
         self.embedding.weight.data.uniform_(-initrange, initrange)
-        self.fc.weight.data.uniform_(-initrange, initrange)
-        self.fc.bias.data.zero_()
+        self.rnn.weight.data.uniform_(-initrange, initrange)
+        self.out.weight.data.uniform_(-initrange, initrange)
+        self.out.bias.data.zero_()
 
-    def forward(self, text):
+    def forward(self, text, hidden):
         embedded = self.embedding(torch.tensor(text))
-        return self.fc(embedded)
+        embedded = self.dropout(embedded)
+        output = self.rnn(embedded, hidden)
+        output = self.out(output)
+        return nn.Softmax(output)
+
+    def initHidden(self):
+        return torch.zeros(1, 1, self.size_embed, device=device)
 
 
 train_loader, val_loader, test_loader = get_loaders(batch_size=1, 
@@ -109,7 +101,24 @@ train_loader, val_loader, test_loader = get_loaders(batch_size=1,
                                                     shuffle_dataset=True, 
                                                     random_seed=123)
 
+
 # TEXT VOCAB GENERATION
+class VocabSizes():
+    def __init__(self, data_loader, tokenizer):
+        self.data_loader = data_loader
+        self.tokenizer = tokenizer
+
+    def yield_tokens_text(self, data_iter):
+        for label, text in data_iter:
+            yield self.tokenizer(text[0])
+
+    def get_vocab_size(self):
+        train_iter = iter(self.data_loader)
+        vocab_text = build_vocab_from_iterator(self.yield_tokens_text(train_iter), specials=["<unk>"])
+        vocab_text.set_default_index(vocab_text["<unk>"])
+        return len(vocab_text)
+
+
 def yield_tokens_text(data_iter):
     for label, text in data_iter:
         yield tokenizer(text[0])
@@ -131,17 +140,48 @@ vocab_label.set_default_index(vocab_label["<unk>"])
 label_pipeline = lambda x: vocab_label(tokenizer(x))
 
 
-
-
+vocab_label_size = len(vocab_label)
 train_iter = iter(train_loader)
 num_class = len(set([label for (label, text) in train_iter]))
-vocab_size = len(vocab_label)
+vocab_size = len(vocab_text)
 emsize = 64
-model = TextClassificationModel(vocab_size, emsize, num_class).to(device)
+model = LSTMModel(vocab_size, emsize, num_class).to(device)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                       mode='min',
+                                                       factor=1,
+                                                       patience=15)
 
 
+def train(train_loader, model):
+    model.train()
+
+    for idx, (label, text) in enumerate(train_loader):
+        optimizer.zero_grad()
+        predicted_label = model(text)
+        loss = criterion(predicted_label, label)
+        loss.backward()
+        #        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+        optimizer.step()
 
 
+def evaluate(val_loader, model):
+    model.eval()
+
+    with torch.no_grad():
+        for idx, (label, text) in enumerate(val_loader):
+            predicted_label = model(text)
+            loss = criterion(predicted_label, label)
+    return loss
+
+
+epochs = 10
+for epoch in range(epochs):
+    train(train_loader)
+
+val_loss = evaluate(val_loader)
 
 ################ COPIED FROM THE INTERNET ############################
 #%%
@@ -184,7 +224,7 @@ train_iter = iter(train_loader)
 
 
 
-def train(dataloader):
+def train_(dataloader):
     model.train()
     total_acc, total_count = 0, 0
     log_interval = 500
@@ -207,7 +247,7 @@ def train(dataloader):
             total_acc, total_count = 0, 0
             start_time = time.time()
 
-def evaluate(dataloader):
+def evaluate_(dataloader):
     model.eval()
     total_acc, total_count = 0, 0
 
@@ -240,7 +280,7 @@ BATCH_SIZE = 64 # batch size for training
 
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LR)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.1)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.1)
 total_accu = None
 train_iter, test_iter = iter(train_loader), iter(test_loader)
 train_dataset = to_map_style_dataset(train_iter)
