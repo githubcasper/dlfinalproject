@@ -24,14 +24,14 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
     val_split = val_split
     shuffle_dataset = shuffle_dataset
     random_seed = random_seed
+    data_path = '../Data/News_Category_Dataset_v2.json'
+    df = pd.read_json(data_path, lines=True)
 
-    df = pd.read_json('../Data/News_Category_Dataset_v2.json', lines=True)
 
     amount_of_data = len(df)
+    dataset = NewsDataset(data_path)
+
     # Create indices to randomly split data into training and test sets:
-
-    dataset = NewsDataset('../Data/News_Category_Dataset_v2.json')
-
     indices = list(range(amount_of_data))
     split = int(np.floor(test_split * amount_of_data))
     split_val = int(np.floor((val_split + test_split) * amount_of_data))
@@ -41,10 +41,9 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
     train_indices, val_indices, test_indices = indices[split_val:], indices[split:split_val], indices[:split]
 
     # Create samplers and DataLoaders
-    test_sampler = SubsetRandomSampler(test_indices)
     train_sampler = SubsetRandomSampler(train_indices)
     val_sampler = SubsetRandomSampler(val_indices)
-
+    test_sampler = SubsetRandomSampler(test_indices)
 
     train_loader = torch.utils.data.DataLoader(dataset,
                                                batch_size=batch_size,
@@ -55,5 +54,6 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
 
     test_loader = torch.utils.data.DataLoader(dataset,
                                               sampler=test_sampler)
+
 
     return train_loader, val_loader, test_loader

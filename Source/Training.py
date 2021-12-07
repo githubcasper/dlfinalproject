@@ -11,6 +11,18 @@ import keyring
 #import os
 #from pathlib import Path as PL
 
+import time
+import torch
+#from torchtext.datasets import AG_NEWS
+#train_iter = AG_NEWS(split='train')
+from torch import nn
+from torch.utils.data import DataLoader
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from torchtext.data.utils import get_tokenizer
+from torchtext.vocab import build_vocab_from_iterator
+from torch.utils.data.dataset import random_split
+from torchtext.data.functional import to_map_style_dataset
+
 #%% Neptune
 
 '''
@@ -33,25 +45,112 @@ run.stop()
 
 #json_path = "..\\Data\\News_Category_Dataset_v2.json"
 
-train_loader, val_loader, test_loader = get_loaders(batch_size=64, 
+train_loader, val_loader, test_loader = get_loaders(batch_size=2, 
                                                     test_split=0.1, 
                                                     val_split=0.1, 
                                                     shuffle_dataset=True, 
                                                     random_seed=123)
 
-next(iter(train_loader))
+train_iter = iter(train_loader)
+next(train_iter)
 
-#test = tmp.df
 
-import time
-import torch
-#from torchtext.datasets import AG_NEWS
-#train_iter = AG_NEWS(split='train')
-from torch import nn
-from torch.utils.data import DataLoader
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from torchtext.data.utils import get_tokenizer
-from torchtext.vocab import build_vocab_from_iterator
+#%% Most recent chunk
+
+def train_iters(train_loader):
+    
+    model.train()
+    total_acc, total_count = 0, 0
+    log_interval = 500
+    start_time = time.time()
+
+    for idx, (label, text) in enumerate(train_loader):
+        optimizer.zero_grad()
+        predicted_label = model(text)
+        loss = criterion(predicted_label, label)
+        loss.backward()
+#        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+        optimizer.step()
+
+        total_acc += (predicted_label.argmax(1) == label).sum().item()
+        total_count += label.size(0)
+
+        if idx % log_interval == 0 and idx > 0:
+            elapsed = time.time() - start_time
+            print('| epoch {:3d} | {:5d}/{:5d} batches '
+                  '| accuracy {:8.3f}'.format(epoch, idx, len(train_loader),
+                                              total_acc/total_count))
+            total_acc, total_count = 0, 0
+            start_time = time.time()
+            
+
+class TextClassificationModel(nn.Module):
+
+    def __init__(self, vocab_size, embed_dim, num_class):
+        super(TextClassificationModel, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim, sparse=True)
+        self.fc = nn.Linear(embed_dim, num_class)
+        self.init_weights()
+
+    def init_weights(self):
+        initrange = 0.5
+        self.embedding.weight.data.uniform_(-initrange, initrange)
+        self.fc.weight.data.uniform_(-initrange, initrange)
+        self.fc.bias.data.zero_()
+
+    def forward(self, text):
+        embedded = self.embedding(torch.tensor(text))
+        return self.fc(embedded)
+
+
+train_loader, val_loader, test_loader = get_loaders(batch_size=1, 
+                                                    test_split=0.1, 
+                                                    val_split=0.1, 
+                                                    shuffle_dataset=True, 
+                                                    random_seed=123)
+
+# TEXT VOCAB GENERATION
+def yield_tokens_text(data_iter):
+    for label, text in data_iter:
+        yield tokenizer(text[0])
+
+train_iter = iter(train_loader)
+vocab_text = build_vocab_from_iterator(yield_tokens_text(train_iter), specials=["<unk>"])
+vocab_text.set_default_index(vocab_text["<unk>"])
+text_pipeline = lambda x: vocab_text(tokenizer(x))
+
+
+# LABEL VOCAB GENERATION
+def yield_tokens_label(data_iter):
+    for label, text in data_iter:
+        yield tokenizer(label[0])
+
+train_iter = iter(train_loader)
+vocab_label = build_vocab_from_iterator(yield_tokens_label(train_iter), specials=["<unk>"])
+vocab_label.set_default_index(vocab_label["<unk>"])
+label_pipeline = lambda x: vocab_label(tokenizer(x))
+
+
+
+
+train_iter = iter(train_loader)
+num_class = len(set([label for (label, text) in train_iter]))
+vocab_size = len(vocab_label)
+emsize = 64
+model = TextClassificationModel(vocab_size, emsize, num_class).to(device)
+
+
+
+
+
+################ COPIED FROM THE INTERNET ############################
+#%%
+
+from torchtext.datasets import AG_NEWS
+train_iter = AG_NEWS(split='train')
+train_iter
+#%%
+
 
 tokenizer = get_tokenizer('basic_english')
 train_iter = iter(train_loader)
@@ -82,23 +181,7 @@ def collate_batch(batch):
 train_iter = iter(train_loader)
 #dataloader = DataLoader(train_iter, batch_size=8, shuffle=False, collate_fn=collate_batch)
 
-class TextClassificationModel(nn.Module):
 
-    def __init__(self, vocab_size, embed_dim, num_class):
-        super(TextClassificationModel, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embed_dim, sparse=True)
-        self.fc = nn.Linear(embed_dim, num_class)
-        self.init_weights()
-
-    def init_weights(self):
-        initrange = 0.5
-        self.embedding.weight.data.uniform_(-initrange, initrange)
-        self.fc.weight.data.uniform_(-initrange, initrange)
-        self.fc.bias.data.zero_()
-
-    def forward(self, text):
-        embedded = self.embedding(text)
-        return self.fc(embedded)
 
 
 def train(dataloader):
@@ -148,8 +231,6 @@ model = TextClassificationModel(vocab_size, emsize, num_class).to(device)
 
 #%% error?
 
-from torch.utils.data.dataset import random_split
-from torchtext.data.functional import to_map_style_dataset
 # Hyperparameters
 EPOCHS = 10 # epoch
 LR = 5  # learning rate
