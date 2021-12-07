@@ -1,16 +1,19 @@
 from Source.Call_Hyperopt import get_best_hyper
 import torch
 from torch import nn
-from Source.Training import LSTMModel, VocabSizes
+from Source.RNNModel import LSTMModel, VocabSizes
 from Source.Dataloader import get_loaders
 from torchtext.data.utils import get_tokenizer
+import torch.nn.functional as F
+
+
 
 def best_hyper(set_of_hyper):
-    num_hidden_layers = set_of_hyper['num_hidden_layers']
-    size_hidden_layer = set_of_hyper['size_hidden_layer']
-    emsize = set_of_hyper['size_embed']
-    dropout = set_of_hyper['dropout']
-    batch_size = set_of_hyper['batch_size']
+    num_hidden_layers = int(set_of_hyper['num_hidden_layers'])
+    size_hidden_layer = int(set_of_hyper['size_hidden_layer'])
+    emsize = int(set_of_hyper['size_embed'])
+    dropout = float(set_of_hyper['dropout'])
+    batch_size = int(set_of_hyper['batch_size'])
 
     train_loader, val_loader, test_loader = get_loaders(batch_size=batch_size,
                                                         test_split=0.1,
@@ -18,11 +21,13 @@ def best_hyper(set_of_hyper):
                                                         shuffle_dataset=True,
                                                         random_seed=123)
 
-    vocab_size = VocabSizes(train_loader, get_tokenizer('basic_english')).get_vocab_size()
-    train_iter = iter(train_loader)
-    num_class = len(set([label for (label, text) in train_iter]))
+    tokenizer = get_tokenizer('basic_english')
+    vocab_size, vocab_text = VocabSizes(tokenizer).get_vocab_size_text()
+    vocab_size_label, vocab_label = VocabSizes(tokenizer).get_vocab_size_label()
+    text_pipeline = lambda x: vocab_text(tokenizer(x))
+    label_pipeline = lambda x: vocab_label(tokenizer(x))
 
-    model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, num_class)
+    model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -32,9 +37,12 @@ def best_hyper(set_of_hyper):
 
         for idx, (label, text) in enumerate(train_loader):
             optimizer.zero_grad()
-            predicted_label = model(text)
-            loss = criterion(predicted_label, label)
-            loss.backward()
+            for i in range(len(text)):
+                predicted_label = model(torch.tensor(text_pipeline(text[i]), dtype=torch.int64))
+                one_hot_label = F.one_hot(torch.tensor(label_pipeline(label[i]),
+                                                       dtype=torch.int64), num_classes=40)
+                loss = criterion(predicted_label, one_hot_label)
+                loss.backward()
             optimizer.step()
 
     def evaluate(val_loader):
@@ -42,13 +50,17 @@ def best_hyper(set_of_hyper):
 
         with torch.no_grad():
             for idx, (label, text) in enumerate(val_loader):
-                predicted_label = model(text)
-                loss = criterion(predicted_label, label)
+                loss = 0
+                for i in range(len(text)):
+                    predicted_label = model(torch.tensor(text_pipeline(text[i]), dtype=torch.int64))
+                    one_hot_label = F.one_hot(torch.tensor(label_pipeline(label[i]),
+                                                                          dtype=torch.int64), num_classes=40)
+                    loss += criterion(predicted_label, one_hot_label)
         return loss
 
     epochs = 10
     for epoch in range(epochs):
-        train(iter(train_loader))
+        train(iter(train_loader), model)
 
     val_loss = evaluate(val_loader)
 

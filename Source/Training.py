@@ -103,11 +103,13 @@ train_loader, val_loader, test_loader = get_loaders(batch_size=1,
 
 
 # TEXT VOCAB GENERATION
+tokenizer = get_tokenizer('basic_english')
 class VocabSizes():
     def __init__(self, data_loader, tokenizer):
         self.data_loader = data_loader
         self.tokenizer = tokenizer
 
+    @staticmethod
     def yield_tokens_text(self, data_iter):
         for label, text in data_iter:
             yield self.tokenizer(text[0])
@@ -145,14 +147,14 @@ train_iter = iter(train_loader)
 num_class = len(set([label for (label, text) in train_iter]))
 vocab_size = len(vocab_text)
 emsize = 64
-model = LSTMModel(vocab_size, emsize, num_class).to(device)
+#model = LSTMModel(vocab_size, emsize, num_class).to(device)
 
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                       mode='min',
-                                                       factor=1,
-                                                       patience=15)
+#criterion = nn.CrossEntropyLoss()
+#optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+#scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+#                                                       mode='min',
+#                                                       factor=1,
+#                                                       patience=15)
 
 
 def train(train_loader, model):
@@ -177,11 +179,11 @@ def evaluate(val_loader, model):
     return loss
 
 
-epochs = 10
-for epoch in range(epochs):
-    train(train_loader)
+#epochs = 10
+#for epoch in range(epochs):
+#    train(train_loader)
 
-val_loss = evaluate(val_loader)
+#val_loss = evaluate(val_loader)
 
 ################ COPIED FROM THE INTERNET ############################
 #%%
