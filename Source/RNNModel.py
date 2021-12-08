@@ -27,7 +27,8 @@ class LSTMModel(nn.Module):
         self.rnn = nn.LSTM(input_size=self.size_embed,
                            hidden_size=self.size_hidden_layer,
                            num_layers=self.num_hidden_layers,
-                           bidirectional=True)
+                           bidirectional=True,
+                           batch_first=True)
 
         self.out = nn.Linear(self.size_hidden_layer * self.size_embed * 2, 40)  # 40 different classes
         self.dropout = nn.Dropout(p=self.dropout_p)
@@ -48,7 +49,7 @@ class LSTMModel(nn.Module):
         embedded = self.embedding(text)
         embedded = self.dropout(embedded)
         output, _ = self.rnn(embedded.unsqueeze(0))
-        output = self.out(output.view(1, -1))
+        output = self.out(output.view(len(text), 1, -1))
         return F.log_softmax(output, dim=1)
 
     def initHidden(self):

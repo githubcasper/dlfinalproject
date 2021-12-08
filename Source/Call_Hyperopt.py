@@ -1,5 +1,4 @@
-from hyperopt import hp, fmin, tpe, space_eval
-import numpy as np
+from hyperopt import hp, fmin, tpe
 from collections import OrderedDict
 
 

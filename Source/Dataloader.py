@@ -7,7 +7,9 @@ import torch
 class NewsDataset(Dataset):
     def __init__(self, json_path):
         self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]
+        self.df = self.df.dropna(axis=0)
         self.df['category'] = self.df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})
+        self.df['headline'] = self.df['headline'].str.lower()
 
     def __len__(self):
         return len(self.df)

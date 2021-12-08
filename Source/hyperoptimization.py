@@ -7,7 +7,6 @@ from torchtext.data.utils import get_tokenizer
 import torch.nn.functional as F
 
 
-
 def best_hyper(set_of_hyper):
     num_hidden_layers = int(set_of_hyper['num_hidden_layers'])
     size_hidden_layer = int(set_of_hyper['size_hidden_layer'])
@@ -53,8 +52,7 @@ def best_hyper(set_of_hyper):
                 loss = 0
                 for i in range(len(text)):
                     predicted_label = model(torch.tensor(text_pipeline(text[i]), dtype=torch.int64))
-                    one_hot_label = F.one_hot(torch.tensor(label_pipeline(label[i]),
-                                                                          dtype=torch.int64), num_classes=40)
+                    one_hot_label = F.one_hot(torch.tensor(label_pipeline(label[i]), dtype=torch.int64), num_classes=40)
                     loss += criterion(predicted_label, one_hot_label)
         return loss
 
