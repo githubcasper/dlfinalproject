@@ -6,3 +6,4 @@ Source/__pycache__/Dataloader.cpython-37.pyc
 Source/__pycache__/RNNModel.cpython-37.pyc
 Source/__pycache__/Dataloader.cpython-37.pyc
 Source/__pycache__/RNNModel.cpython-37.pyc
+*.pyc
