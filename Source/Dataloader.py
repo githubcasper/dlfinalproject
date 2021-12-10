@@ -6,10 +6,12 @@ import torch
 
 class NewsDataset(Dataset):
     def __init__(self, json_path):
-        self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]
-        self.df = self.df.dropna(axis=0)
-        self.df['category'] = self.df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})
-        self.df['headline'] = self.df['headline'].str.lower()
+        self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]  # Load data, but only keep columns of interest
+        self.df = self.df.dropna(axis=0)  # Remove rows with no category or headline
+        self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
+        self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
+        self.df['category'] = self.df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})  # Same label
+        self.df['headline'] = self.df['headline'].str.lower()  # All headlines in lower case
 
     def __len__(self):
         return len(self.df)
@@ -29,6 +31,9 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
     random_seed = random_seed
     data_path = '../Data/News_Category_Dataset_v2.json'
     df = pd.read_json(data_path, lines=True)
+    df = df.dropna(axis=0)  # Remove rows with no category or headline
+    df = df.loc[df['headline'].str.len() > 0]  # Remove rows where headline is empty string
+    df = df.loc[df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
 
     amount_of_data = len(df)
     dataset = NewsDataset(data_path)
