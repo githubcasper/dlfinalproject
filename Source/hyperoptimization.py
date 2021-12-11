@@ -41,7 +41,6 @@ def best_hyper(set_of_hyper):
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze() if predicted_label.size(0) > 1 else predicted_label.squeeze().unsqueeze(0)
             loss = criterion(predicted_label, label)
-
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

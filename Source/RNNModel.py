@@ -47,7 +47,7 @@ class LSTMModel(nn.Module):
 
         output, hidden = self.rnn(embedded, hidden)
         output = self.out(output.reshape(batch_size, 1, -1))
-        return F.log_softmax(output, dim=1)
+        return F.log_softmax(output, dim=0)
 
     def initHidden(self, batch_size):
         return torch.zeros(2 * self.num_hidden_layers, batch_size, self.size_hidden_layer, device=device)
