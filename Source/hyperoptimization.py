@@ -15,6 +15,26 @@ text_pipeline = lambda x: vocab_text(tokenizer(x))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+#%%
+##########
+##########
+##########
+##########
+##########
+##########                        BESKED TIL CASPER:
+##########  Jeg har midlertidigt smidt breaks ind i nedenstående kode for at 
+##########  tage et shortcut og teste kaldet til hyperopt. Jeg får fejlen 
+##########  "TypeError: iteration over a 0-d tensor", når den er færdig med 
+##########  første omgang af train og val.
+########## 
+##########
+##########
+##########
+##########
+#%%
+
+
+
 
 def best_hyper(set_of_hyper):
     print(set_of_hyper)
@@ -39,9 +59,11 @@ def best_hyper(set_of_hyper):
     def train(train_loader, model):
         model.train()
 
-        for idx, (label, text) in enumerate(train_loader):
-            if idx % 50 == 0:
-                print(f'Batch index: {idx}')
+        for batch_idx, (label, text) in enumerate(train_loader):
+            if batch_idx % 5 == 0:
+                print(f'Batch index: {batch_idx}')
+            if batch_idx == 1:
+                break
             optimizer.zero_grad()
             loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
             for i in range(len(text)):
@@ -64,19 +86,20 @@ def best_hyper(set_of_hyper):
         with torch.no_grad():
             loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
             for idx, (label, text) in enumerate(val_loader):
-                for i in range(len(text)):
-                    input_list = text_pipeline(text[i])
-                    while len(input_list) < max_length:
-                        input_list.append(text_pipeline('<pad>')[0])
-                    input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
-                    predicted_label = model(input_tensor)
+                if idx == 250:
+                    break
+                input_list = text_pipeline(text[0])
+                while len(input_list) < max_length:
+                    input_list.append(text_pipeline('<pad>')[0])
+                input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
+                predicted_label = model(input_tensor)
 
-                    target_label = torch.tensor(vocab_label[label[i]], dtype=torch.int64, device=device).unsqueeze(0)
+                target_label = torch.tensor(vocab_label[label[0]], dtype=torch.int64, device=device).unsqueeze(0)
 
-                    loss += criterion(predicted_label, target_label)
+                loss += criterion(predicted_label, target_label)
         return loss
 
-    epochs = 5
+    epochs = 1
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)

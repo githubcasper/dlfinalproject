@@ -46,6 +46,7 @@ text_pipeline = lambda x: vocab_text(tokenizer(x))
 model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, max_length).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer_name = type(optimizer).__name__
 
 
 #%% Neptune
@@ -55,20 +56,15 @@ secret_api = keyring.get_password('Neptune', "andreastind")
 run = neptune.init(project="andreastind/DeepLearningFinalProject",
                    api_token=secret_api)
 
-params = {"num_hidden_layers": num_hidden_layers,
-          "size_hidden_layer": size_hidden_layer,
-          "embidding_size": emsize,
-          "dropout": dropout,
-          "batch_size": batch_size,
-          "learning_rate": learning_rate, 
-          "Optimizer": "Adam"}
+params = {"Number of hidden layers": num_hidden_layers,
+          "Size of hidden layer":    size_hidden_layer,
+          "Embedding size":          emsize,
+          "Dropout":                 dropout,
+          "Batch size":              batch_size,
+          "Learning rate":           learning_rate, 
+          "Optimizer":               optimizer_name}
+
 run["parameters"] = params
-
-#for epoch in range(10):
-#    run["train/loss"].log(0.9 ** epoch)
-
-#run["eval/f1_score"] = 0.66
-#run.stop()
 
 
 #%% Training
@@ -103,14 +99,13 @@ def train_step(batch_labels, batch_texts):
 
 def train(dataloader):
     model.train()
-#    total_acc, total_count = 0, 0
     log_interval = 2
     total_loss = []
     start_time = time.time()
     n_data = len(dataloader)
     run["train/n_data"] = n_data
 
-    for batch_num, (batch_labels, batch_texts) in enumerate(dataloader):
+    for batch_idx, (batch_labels, batch_texts) in enumerate(dataloader):
         optimizer.zero_grad()
         loss, total_correct, total_count = train_step(batch_labels, batch_texts)
         loss.backward()
@@ -118,26 +113,37 @@ def train(dataloader):
         print("avg_loss:", loss.item()/total_count)
         total_loss.append(loss.item()/total_count)
 
-        run["train/avg_batch_loss"].log(loss.item()/total_count) # log average loss to neptune
-        run["train/avg_batch_accuracy"].log(round(100*total_correct/total_count, 3)) # log average accuracy to neptune
+        avg_batch_accuracy = round(100*total_correct/total_count, 3)
 
-        if batch_num % log_interval == 0 and batch_num > 0:
+        run["train/batch_idx"].log(batch_idx)
+        run["train/avg_batch_loss"].log(loss.item()/total_count) # log average loss to neptune
+        run["train/avg_batch_accuracy"].log(avg_batch_accuracy) # log average accuracy to neptune
+
+        if batch_idx % log_interval == 0 and batch_idx > 0:
             elapsed = time.time() - start_time
             print('| {:5d}/{:5d} batches '
-                  '| train_accuracy {:8.3f} | Time elapsed {:.2f}s'.format(batch_num,
+                  '| train_accuracy {:8.3f} | Time elapsed {:.2f}s'.format(batch_idx,
                                                                            n_data,
-                                                                           total_correct/total_count,
+                                                                           avg_batch_accuracy,
                                                                            elapsed))
         optimizer.step()
         
     return total_loss
 
 
-train(train_loader)
+tot_loss = train(train_loader)
 
 #%%
 
 run.stop()
+
+#%%
+import matplotlib.pyplot as plt
+
+plt.plot(tot_loss)
+plt.ylabel("Average batch loss")
+plt.xlabel("Batch number")
+plt.show()
 
 #%% Evaluate model
 
@@ -151,7 +157,7 @@ def evaluate(dataloader):
     
     with torch.no_grad():
         for idx, (label, text) in enumerate(dataloader):
-#            loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
+            #loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
                 
             input_list = text_pipeline(text[0])
             while len(input_list) < max_length:
@@ -163,9 +169,11 @@ def evaluate(dataloader):
                                         dtype=torch.int64,
                                         device=device).unsqueeze(0)
             
-#            loss += criterion(predicted_label, target_label)
+            #loss += criterion(predicted_label, target_label)
             total_correct += (predicted_label.argmax(1) == target_label).sum().item()
             total_count += target_label.size(0)
+            
+            run["eval/accuracy"].log(100*total_correct/total_count)
             
             if idx % 500 == 0 and idx > 0:
                 elapsed = round(time.time() - start_time, 2)
@@ -216,8 +224,9 @@ custom_input_eval(tmp_)
 
 
 
-
-#%% Garbage code storage below
+#%%############################################################################
+###################   Garbage code storage below   ############################
+###############################################################################
 
 
 train_loader, val_loader, test_loader = get_loaders(batch_size=1, 
