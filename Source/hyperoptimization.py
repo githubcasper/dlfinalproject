@@ -10,10 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = get_tokenizer('basic_english')
 vocab_sizes = VocabSizes(tokenizer)
 vocab_size, vocab_text = vocab_sizes.get_vocab_size_text()
-#vocab_label = vocab_sizes.get_label_dict()
-#vocab_int_to_label = vocab_sizes.get_int_to_label_dict()
 max_length = vocab_sizes.get_max_len()
-#text_pipeline = lambda x: vocab_text(tokenizer(x))
 
 train_loader, val_loader, test_loader = get_loaders(batch_size=300,
                                                     test_split=0.025,
