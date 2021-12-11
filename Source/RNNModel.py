@@ -1,9 +1,11 @@
 import torch
 from torch import nn
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from torchtext.vocab import build_vocab_from_iterator
-from Dataloader import get_loaders
+from VocabDataloader import loader_for_vocab
 import torch.nn.functional as F
+from torchtext.data.utils import get_tokenizer
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class LSTMModel(nn.Module):
@@ -38,15 +40,17 @@ class LSTMModel(nn.Module):
             elif 'weight' in name:
                 nn.init.xavier_normal_(param)
 
-    def forward(self, text):
+    def forward(self, text, batch_size):
+        hidden = (self.initHidden(batch_size), self.initHidden(batch_size))
         embedded = self.embedding(text)
         embedded = self.dropout(embedded)
-        output, _ = self.rnn(embedded.unsqueeze(0))
-        output = self.out(output.view(1, -1))
+
+        output, hidden = self.rnn(embedded, hidden)
+        output = self.out(output.reshape(batch_size, 1, -1))
         return F.log_softmax(output, dim=1)
 
-    def initHidden(self):
-        return torch.zeros(1, 1, self.size_embed, device=device)
+    def initHidden(self, batch_size):
+        return torch.zeros(2 * self.num_hidden_layers, batch_size, self.size_hidden_layer, device=device)
 
 
 class VocabSizes():
@@ -54,11 +58,7 @@ class VocabSizes():
         self.tokenizer = tokenizer
         self.max_len = 0
         self.label_dict = {}
-        self.train_loader, self.val_loader, self.test_loader = get_loaders(batch_size=1,
-                                                                           test_split=0.0,
-                                                                           val_split=0.0,
-                                                                           shuffle_dataset=True,
-                                                                           random_seed=123)
+        self.loader = loader_for_vocab()
 
     @staticmethod
     def yield_tokens_text(self, data_iter):
@@ -73,7 +73,7 @@ class VocabSizes():
             yield the_tokenized
 
     def get_vocab_size_text(self):
-        train_iter = iter(self.train_loader)
+        train_iter = iter(self.loader)
         vocab_text = build_vocab_from_iterator(self.yield_tokens_text(self, train_iter), specials=["<unk>"])
         vocab_text.set_default_index(vocab_text["<unk>"])
         return len(vocab_text), vocab_text

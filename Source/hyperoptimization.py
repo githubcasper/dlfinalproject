@@ -5,15 +5,21 @@ from RNNModel import LSTMModel, VocabSizes
 from Dataloader import get_loaders
 from torchtext.data.utils import get_tokenizer
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 tokenizer = get_tokenizer('basic_english')
 vocab_sizes = VocabSizes(tokenizer)
 vocab_size, vocab_text = vocab_sizes.get_vocab_size_text()
-vocab_label = vocab_sizes.get_label_dict()
-vocab_int_to_label = vocab_sizes.get_int_to_label_dict()
+#vocab_label = vocab_sizes.get_label_dict()
+#vocab_int_to_label = vocab_sizes.get_int_to_label_dict()
 max_length = vocab_sizes.get_max_len()
-text_pipeline = lambda x: vocab_text(tokenizer(x))
+#text_pipeline = lambda x: vocab_text(tokenizer(x))
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+train_loader, val_loader, test_loader = get_loaders(batch_size=300,
+                                                    test_split=0.025,
+                                                    val_split=0.025,
+                                                    shuffle_dataset=True,
+                                                    random_seed=123)
 
 
 def best_hyper(set_of_hyper):
@@ -22,14 +28,7 @@ def best_hyper(set_of_hyper):
     size_hidden_layer = int(set_of_hyper['size_hidden_layer'])
     emsize = int(set_of_hyper['size_embed'])
     dropout = float(set_of_hyper['dropout'])
-    batch_size = int(set_of_hyper['batch_size'])
     lr = float(set_of_hyper['LR'])
-
-    train_loader, val_loader, test_loader = get_loaders(batch_size=batch_size,
-                                                        test_split=0.1,
-                                                        val_split=0.1,
-                                                        shuffle_dataset=True,
-                                                        random_seed=123)
 
     model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, max_length).to(device)
 
@@ -38,23 +37,15 @@ def best_hyper(set_of_hyper):
 
     def train(train_loader, model):
         model.train()
-
         for idx, (label, text) in enumerate(train_loader):
             if idx % 50 == 0:
                 print(f'Batch index: {idx}')
+
+            predicted_label = model(text, text.size(0))
+            predicted_label = predicted_label.squeeze() if predicted_label.size(0) > 1 else predicted_label.squeeze().unsqueeze(0)
+            loss = criterion(predicted_label, label)
+
             optimizer.zero_grad()
-            loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
-            for i in range(len(text)):
-                input_list = text_pipeline(text[i])
-                while len(input_list) < max_length:
-                    input_list.append(text_pipeline('<pad>')[0])
-                input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
-                predicted_label = model(input_tensor)
-
-                target_label = torch.tensor(vocab_label[label[i]], dtype=torch.int64, device=device).unsqueeze(0)
-
-                loss += criterion(predicted_label, target_label)
-
             loss.backward()
             optimizer.step()
 
@@ -62,28 +53,20 @@ def best_hyper(set_of_hyper):
         model.eval()
 
         with torch.no_grad():
-            loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
             for idx, (label, text) in enumerate(val_loader):
-                for i in range(len(text)):
-                    input_list = text_pipeline(text[i])
-                    while len(input_list) < max_length:
-                        input_list.append(text_pipeline('<pad>')[0])
-                    input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
-                    predicted_label = model(input_tensor)
+                predicted_label = model(text, text.size(0))
+                loss = criterion(predicted_label.squeeze(), label)
 
-                    target_label = torch.tensor(vocab_label[label[i]], dtype=torch.int64, device=device).unsqueeze(0)
-
-                    loss += criterion(predicted_label, target_label)
         return loss
 
-    epochs = 5
+    epochs = 2
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
 
-    val_loss = evaluate(val_loader)
+    val_loss = evaluate(iter(val_loader))
 
-    return val_loss
+    return val_loss.item()
 
 
 best_parameter = get_best_hyper(best_hyper)
