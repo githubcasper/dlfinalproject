@@ -5,94 +5,219 @@ Created on Tue Nov 30 13:07:56 2021
 @author: Andreas Tind
 """
 
-from Source.Dataloader import get_loaders
-#import neptune.new as neptune
-#import keyring+
-#import os
-#from pathlib import Path as PL
-
+from Dataloader import get_loaders
+import neptune.new as neptune
+import keyring
+from RNNModel import LSTMModel, VocabSizes
 import time
 import torch
-#from torchtext.datasets import AG_NEWS
-#train_iter = AG_NEWS(split='train')
 from torch import nn
-from torch.utils.data import DataLoader
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#import torch.nn.functional as F
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from torch.utils.data.dataset import random_split
 from torchtext.data.functional import to_map_style_dataset
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+#%% Model setup
+
+num_hidden_layers = 4
+size_hidden_layer = 17
+emsize = 25
+dropout = 0.2
+batch_size = 500
+learning_rate = 0.01
+
+train_loader, val_loader, test_loader = get_loaders(batch_size=batch_size,
+                                                    test_split=0.1,
+                                                    val_split=0.1,
+                                                    shuffle_dataset=True,
+                                                    random_seed=123)
+
+tokenizer = get_tokenizer('basic_english')
+vocab_sizes = VocabSizes(tokenizer)
+vocab_size, vocab_text = vocab_sizes.get_vocab_size_text()
+vocab_label = vocab_sizes.get_label_dict()
+vocab_int_to_label = vocab_sizes.get_int_to_label_dict()
+max_length = vocab_sizes.get_max_len()
+text_pipeline = lambda x: vocab_text(tokenizer(x))
+
+model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, max_length).to(device)
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
 
 #%% Neptune
 
-'''
 secret_api = keyring.get_password('Neptune', "andreastind")
 
 run = neptune.init(project="andreastind/DeepLearningFinalProject",
                    api_token=secret_api)
 
-params = {"learning_rate": 0.001, "optimizer": "Adam"}
+params = {"num_hidden_layers": num_hidden_layers,
+          "size_hidden_layer": size_hidden_layer,
+          "embidding_size": emsize,
+          "dropout": dropout,
+          "batch_size": batch_size,
+          "learning_rate": learning_rate, 
+          "Optimizer": "Adam"}
 run["parameters"] = params
 
-for epoch in range(10):
-    run["train/loss"].log(0.9 ** epoch)
+#for epoch in range(10):
+#    run["train/loss"].log(0.9 ** epoch)
 
-run["eval/f1_score"] = 0.66
-run.stop()
-'''
+#run["eval/f1_score"] = 0.66
+#run.stop()
+
 
 #%% Training
 
-#json_path = "..\\Data\\News_Category_Dataset_v2.json"
+def train_step(batch_labels, batch_texts):
+    '''
+    takes one training step using one batch
+    '''
+    loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
+    total_correct = 0 
+    total_count = 0
 
-train_loader, val_loader, test_loader = get_loaders(batch_size=2, 
-                                                    test_split=0.1, 
-                                                    val_split=0.1, 
-                                                    shuffle_dataset=True, 
-                                                    random_seed=123)
+    for i in range(len(batch_texts)): # iterate through the batch
+        input_list = text_pipeline(batch_texts[i])
+        while len(input_list) < max_length:
+            input_list.append(text_pipeline('<pad>')[0])
+        input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
+        predicted_label = model(input_tensor)
+        
+        target_label = torch.tensor(vocab_label[batch_labels[i]],
+                                    dtype=torch.int64,
+                                    device=device).unsqueeze(0)
+    
+        loss += criterion(predicted_label, target_label)
 
-#train_iter = iter(train_loader)
-#next(train_iter)
+        total_correct += (predicted_label.argmax(1) == target_label).sum().item()
+        total_count += target_label.size(0)
+
+    return loss, total_correct, total_count
 
 
-#%% Most recent chunk
 
-class LSTMModel(nn.Module):
+def train(dataloader):
+    model.train()
+#    total_acc, total_count = 0, 0
+    log_interval = 2
+    total_loss = []
+    start_time = time.time()
+    n_data = len(dataloader)
+    run["train/n_data"] = n_data
 
-    def __init__(self, vocab_size, embed_dim, dropout, num_hidden_layers, size_hidden_layer, num_classes=40):
-        super(LSTMModel, self).__init__()
-        self.size_embed = embed_dim
-        self.size_hidden_layer = size_hidden_layer
-        self.num_hidden_layers = num_hidden_layers
-        self.dropout_p = dropout
+    for batch_num, (batch_labels, batch_texts) in enumerate(dataloader):
+        optimizer.zero_grad()
+        loss, total_correct, total_count = train_step(batch_labels, batch_texts)
+        loss.backward()
 
-        self.embedding = nn.Embedding(vocab_size, self.size_embed, sparse=True)
+        print("avg_loss:", loss.item()/total_count)
+        total_loss.append(loss.item()/total_count)
 
-        self.rnn = nn.LSTM(input_size=self.size_embed,
-                           hidden_size=self.size_hidden_layer,
-                           num_layers=self.num_hidden_layers,
-                           bidirectional=True)
+        run["train/avg_batch_loss"].log(loss.item()/total_count) # log average loss to neptune
+        run["train/avg_batch_accuracy"].log(round(100*total_correct/total_count, 3)) # log average accuracy to neptune
 
-        self.out = nn.Linear(self.size_hidden_layer, num_classes)
-        self.dropout = nn.Dropout(p=self.dropout_p)
-        self.init_weights()
+        if batch_num % log_interval == 0 and batch_num > 0:
+            elapsed = time.time() - start_time
+            print('| {:5d}/{:5d} batches '
+                  '| train_accuracy {:8.3f} | Time elapsed {:.2f}s'.format(batch_num,
+                                                                           n_data,
+                                                                           total_correct/total_count,
+                                                                           elapsed))
+        optimizer.step()
+        
+    return total_loss
 
-    def init_weights(self):
-        initrange = 0.5
-        self.embedding.weight.data.uniform_(-initrange, initrange)
-        self.rnn.weight.data.uniform_(-initrange, initrange)
-        self.out.weight.data.uniform_(-initrange, initrange)
-        self.out.bias.data.zero_()
 
-    def forward(self, text, hidden):
-        embedded = self.embedding(torch.tensor(text))
-        embedded = self.dropout(embedded)
-        output = self.rnn(embedded, hidden)
-        output = self.out(output)
-        return nn.Softmax(output)
+train(train_loader)
 
-    def initHidden(self):
-        return torch.zeros(1, 1, self.size_embed, device=device)
+#%%
+
+run.stop()
+
+#%% Evaluate model
+
+def evaluate(dataloader):
+    model.eval()
+    total_correct = 0 
+    total_count = 0
+    n_data = len(dataloader)
+    start_time = time.time()
+
+    
+    with torch.no_grad():
+        for idx, (label, text) in enumerate(dataloader):
+#            loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
+                
+            input_list = text_pipeline(text[0])
+            while len(input_list) < max_length:
+                input_list.append(text_pipeline('<pad>')[0])
+            input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
+
+            predicted_label = model(input_tensor)
+            target_label = torch.tensor(vocab_label[label[0]],
+                                        dtype=torch.int64,
+                                        device=device).unsqueeze(0)
+            
+#            loss += criterion(predicted_label, target_label)
+            total_correct += (predicted_label.argmax(1) == target_label).sum().item()
+            total_count += target_label.size(0)
+            
+            if idx % 500 == 0 and idx > 0:
+                elapsed = round(time.time() - start_time, 2)
+                print("| {:5d}/{:5d} evaluated "
+                      "| accuracy: {:3.2f}% | time elapsed: {:.1f}s".format(#loss,
+                                                  idx,
+                                                  n_data,
+                                                  100*total_correct/total_count,
+                                                  elapsed))
+            
+    return total_correct/total_count
+
+eval_acc = evaluate(test_loader)
+
+#%% Custom input eval
+
+model.eval()
+
+def custom_input_eval(input_string):
+    pipe = text_pipeline(input_string)
+    while len(pipe) < 35:
+        pipe.append(text_pipeline('<pad>')[0])
+    pipe = torch.tensor(pipe, dtype=torch.int64, device=device)
+    label_int_pred = model(pipe).argmax(1).item()
+    return vocab_int_to_label[label_int_pred]
+
+
+tmp_ = "Former NFL Star Demaryius Thomas Found Dead At 33"
+tmp_ = "sport sport sport sport sport sport"
+tmp_ = "Jimmy Kimmel Mocks Fox News For Spinning Christmas Tree Fire Into A ‘Hate Crime’"
+tmp_ = "Daunte Wright’s Girlfriend Recalls His Death In Emotional Testimony At Kim Potter Trial"
+tmp_ = "Appeals Court Denies Trump’s Request To Keep Jan. 6 Records Hidden"
+tmp_ = "53 Migrants Dead, 54 Injured In Truck Crash In South Mexico"
+tmp_ = "Stephen Colbert Turns Fox News' Latest Whine Into A Taunting New Chant"
+tmp_ = "Is It Rude To Send A Cocktail Back?"
+tmp_ = "How To Advocate For Yourself In Your Year-End Review"
+tmp_ = "Are Your House Slippers Destroying Your Feet? Here’s What Podiatrists Say."
+tmp_ = "Body Found, Boyfriend Arrested Amid Search For Florida Woman Abducted From Work"
+tmp_ = "Chile's President Signs Same-Sex Marriage Bill Into Law After Historic Vote"
+tmp_ = "Simone Biles Is Time Magazine's 2021 Athlete Of The Year"
+tmp_ = "I'm Black But Look White. Here Are The Horrible Things White People Feel Safe Telling Me."
+tmp_ = "Body Found, Boyfriend Arrested Amid Search For Florida Woman Abducted From Work"
+tmp_ = "As Biden Talks of a Boom, Inflation and the Virus Weigh on Americans"
+tmp_ = "The National Bank disagrees with government: there is still a need for interference in the housing market"
+tmp_ = "Sex and The City has resurrected and the critics are not imppressed"
+
+custom_input_eval(tmp_)
+
+
+
+
+#%% Garbage code storage below
 
 
 train_loader, val_loader, test_loader = get_loaders(batch_size=1, 
