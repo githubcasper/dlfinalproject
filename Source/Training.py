@@ -22,14 +22,16 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #%% Model setup
 
-num_hidden_layers = 4
-size_hidden_layer = 17
-emsize = 25
-dropout = 0.2
-batch_size = 500
+num_hidden_layers = 1
+size_hidden_layer = 43
+emsize = 67
+dropout = 0.4501
+batch_size = 300
 learning_rate = 0.01
 
-train_loader, val_loader, test_loader = get_loaders(batch_size=batch_size,
+train_loader, val_loader, test_loader = get_loaders(batch_size_train=batch_size,
+                                                    batch_size_val=300,
+                                                    batch_size_test=300,
                                                     test_split=0.1,
                                                     val_split=0.1,
                                                     shuffle_dataset=True,
@@ -69,135 +71,162 @@ run["parameters"] = params
 
 #%% Training
 
-def train_step(batch_labels, batch_texts):
-    '''
-    takes one training step using one batch
-    '''
-    loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
-    total_correct = 0 
-    total_count = 0
-
-    for i in range(len(batch_texts)): # iterate through the batch
-        input_list = text_pipeline(batch_texts[i])
-        while len(input_list) < max_length:
-            input_list.append(text_pipeline('<pad>')[0])
-        input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
-        predicted_label = model(input_tensor)
-        
-        target_label = torch.tensor(vocab_label[batch_labels[i]],
-                                    dtype=torch.int64,
-                                    device=device).unsqueeze(0)
-    
-        loss += criterion(predicted_label, target_label)
-
-        total_correct += (predicted_label.argmax(1) == target_label).sum().item()
-        total_count += target_label.size(0)
-
-    return loss, total_correct, total_count
-
-
-
-def train(dataloader):
+def train(dataloader, model):
     model.train()
-    log_interval = 2
+    log_interval = 100
     total_loss = []
     start_time = time.time()
     n_data = len(dataloader)
-    run["train/n_data"] = n_data
+#    run["train/n_data"] = n_data
 
     for batch_idx, (batch_labels, batch_texts) in enumerate(dataloader):
+        predicted_labels = model(batch_texts, batch_texts.size(0))
+        predicted_labels = predicted_labels.squeeze() if predicted_labels.size(0) > 1 \
+            else predicted_labels.squeeze().unsqueeze(0) 
+
+        loss = criterion(predicted_labels, batch_labels)
+        total_loss.append(loss.item())
+
         optimizer.zero_grad()
-        loss, total_correct, total_count = train_step(batch_labels, batch_texts)
         loss.backward()
-
-        print("avg_loss:", loss.item()/total_count)
-        total_loss.append(loss.item()/total_count)
-
-        avg_batch_accuracy = round(100*total_correct/total_count, 3)
-
-        run["train/batch_idx"].log(batch_idx)
-        run["train/avg_batch_loss"].log(loss.item()/total_count) # log average loss to neptune
-        run["train/avg_batch_accuracy"].log(avg_batch_accuracy) # log average accuracy to neptune
-
-        if batch_idx % log_interval == 0 and batch_idx > 0:
-            elapsed = time.time() - start_time
-            print('| {:5d}/{:5d} batches '
-                  '| train_accuracy {:8.3f} | Time elapsed {:.2f}s'.format(batch_idx,
-                                                                           n_data,
-                                                                           avg_batch_accuracy,
-                                                                           elapsed))
         optimizer.step()
-        
+
+#        run["train/batch_idx"].log(batch_idx)
+#        run["train/avg_batch_loss"].log(loss.item())#/total_count) # log average loss to neptune
+#        run["train/avg_batch_accuracy"].log(avg_batch_accuracy) # log average accuracy to neptune
+
+        if ((batch_idx+1) % log_interval == 0 and batch_idx > 0) or (batch_idx+1 == n_data):
+            elapsed = time.time() - start_time
+            print('| {:4d} /{:4d} batches '
+                  '| train_loss {:5.3f} '
+                  '| Time elapsed {:.1f}s |'.format(batch_idx+1,
+                                                  n_data,
+                                                  loss,
+                                                  elapsed))
     return total_loss
 
 
-tot_loss = train(train_loader)
+tot_loss = train(iter(train_loader), model)
 
-#%%
-
-run.stop()
-
-#%%
-import matplotlib.pyplot as plt
-
-plt.plot(tot_loss)
-plt.ylabel("Average batch loss")
-plt.xlabel("Batch number")
-plt.show()
 
 #%% Evaluate model
 
 def evaluate(dataloader):
     model.eval()
-    total_correct = 0 
-    total_count = 0
+    correct_count_in_batch_list = [] 
+    count_in_batch_list = []
+    running_accuracy = []
     n_data = len(dataloader)
+    correct = 0
+    count = 0
+    loss = 0
     start_time = time.time()
-
     
     with torch.no_grad():
-        for idx, (label, text) in enumerate(dataloader):
-            #loss = torch.autograd.Variable(torch.tensor(0, dtype=torch.float32, device=device))
-                
-            input_list = text_pipeline(text[0])
-            while len(input_list) < max_length:
-                input_list.append(text_pipeline('<pad>')[0])
-            input_tensor = torch.tensor(input_list, dtype=torch.int64, device=device)
+        for idx, (labels, texts) in enumerate(dataloader):
+            predicted_labels = model(texts, texts.size(0))
+            batch_class_preds = predicted_labels.argmax(2).squeeze()
 
-            predicted_label = model(input_tensor)
-            target_label = torch.tensor(vocab_label[label[0]],
-                                        dtype=torch.int64,
-                                        device=device).unsqueeze(0)
+            loss += criterion(predicted_labels.squeeze(), labels)
+            cum_loss = loss / (idx+1)
             
-            #loss += criterion(predicted_label, target_label)
-            total_correct += (predicted_label.argmax(1) == target_label).sum().item()
-            total_count += target_label.size(0)
+
+            correct += torch.sum(torch.eq(batch_class_preds, labels)).item()
+            count += len(labels)
+            accuracy = 100 * correct / count
+
+            correct_count_in_batch_list.append(correct)
+            count_in_batch_list.append(len(labels))
+            running_accuracy.append(accuracy)
             
-            run["eval/accuracy"].log(100*total_correct/total_count)
+     #       run["eval/accuracy"].log(100*total_correct/total_count)
             
-            if idx % 500 == 0 and idx > 0:
+            if ((idx+1) % 25 == 0 and idx > 0) or (idx+1 == n_data):
                 elapsed = round(time.time() - start_time, 2)
-                print("| {:5d}/{:5d} evaluated "
-                      "| accuracy: {:3.2f}% | time elapsed: {:.1f}s".format(#loss,
-                                                  idx,
+                print("| {:3d}/{:3d} batches "
+                      "| cumulative loss: {:.4f} "
+                      "| cumulative accuracy: {:3.2f}% "
+                      "| time elapsed: {:.1f}s |".format(idx+1,
                                                   n_data,
-                                                  100*total_correct/total_count,
+                                                  cum_loss,
+                                                  accuracy,
                                                   elapsed))
             
-    return total_correct/total_count
+    return accuracy, cum_loss
 
-eval_acc = evaluate(test_loader)
+eval_acc = evaluate(iter(val_loader))
+
+#%%
+
+epochs = 100
+avg_epoch_loss = []
+epoch_val_acc_list = []
+epoch_val_loss_list = []
+
+for epoch in range(epochs):
+    print("Initiating training...")
+    epoch_loss = train(train_loader, model)
+    epoch_loss = sum(epoch_loss)/len(epoch_loss)
+    avg_epoch_loss.append(epoch_loss)
+
+#    run["train/avg_epoch_loss"].log(epoch_loss)    
+
+    print("Initiating evaluation...")
+    epoch_val_acc, epoch_val_loss = evaluate(iter(val_loader))
+    epoch_val_acc_list.append(epoch_val_acc)
+    epoch_val_loss_list.append(epoch_val_loss)
+    
+#    run["validation/epoch_val_accuracy"].log(epoch_val_acc)
+#    run["validation/epoch_val_loss"].log(epoch_val_loss)
+
+    print("Finished epoch: {}/{} "
+          "| Val_loss {:.4f} |"
+          "| Val_accuracy: {:3.2f}% ".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
+
+torch.save(model.state_dict(), 'model_weights_12-12-03-27.pth')
+
+#%%
+model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, 
+                  size_hidden_layer, max_length).to(device) 
+model.load_state_dict(torch.load('model_weights_12-12-00-49.pth'))
+model.eval()
+
+#run.stop()
+
+#%%
+import matplotlib.pyplot as plt
+
+plt.plot(avg_epoch_loss)
+plt.ylabel("Average epoch loss")
+plt.xlabel("Epoch number")
+plt.show()
 
 #%% Custom input eval
+#model_trained = model
+
 
 model.eval()
+
+tmp_ = "sport sport sport, nfl"
+tmp_ = text_pipeline(tmp_)
+while len(tmp_) < 35:
+    tmp_.append(text_pipeline('<pad>')[0])
+tmp_ = torch.tensor(tmp_, dtype=torch.int64, device=device)
+tmp_ = tmp_.unsqueeze(0)
+print("size:", tmp_.size())
+pred = model(tmp_, tmp_.size(0))
+pred = pred.squeeze()
+
+lip = tmp_.squeeze(0).argmax(2).item()
+vocab_int_to_label[lip]
 
 def custom_input_eval(input_string):
     pipe = text_pipeline(input_string)
     while len(pipe) < 35:
         pipe.append(text_pipeline('<pad>')[0])
     pipe = torch.tensor(pipe, dtype=torch.int64, device=device)
-    label_int_pred = model(pipe).argmax(1).item()
+
+    label_int_pred = model(pipe, pipe.size(0)).argmax(1).item()
     return vocab_int_to_label[label_int_pred]
 
 
