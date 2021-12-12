@@ -38,7 +38,6 @@ def best_hyper(set_of_hyper):
         for batch_idx, (label, text) in enumerate(train_loader):
             if batch_idx % 50 == 0:
                 print('Batch index: {:4d}/{:4d}'.format(batch_idx, len(train_loader)))
-                break
 
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze() if predicted_label.size(0) > 1 else predicted_label.squeeze().unsqueeze(0)
@@ -52,16 +51,13 @@ def best_hyper(set_of_hyper):
 
         with torch.no_grad():
             for idx, (labels, texts) in enumerate(val_loader):
-                #labels, texts = val_loader
-                print(texts)
-                print(texts.size(0))
                 predicted_labels = model(texts, texts.size(0))
                 loss = criterion(predicted_labels.squeeze(), labels)
                 
         return loss
     
     # training session
-    epochs = 1
+    epochs = 2
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
@@ -70,6 +66,7 @@ def best_hyper(set_of_hyper):
     val_loss = evaluate(iter(val_loader))
     print("Validation loss:", val_loss.item())
     return val_loss.item()
+
 
 best_parameter_ = get_best_hyper(best_hyper)
 print(best_parameter_)
