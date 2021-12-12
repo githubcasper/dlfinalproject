@@ -44,8 +44,12 @@ vocab_label = vocab_sizes.get_label_dict()
 vocab_int_to_label = vocab_sizes.get_int_to_label_dict()
 max_length = vocab_sizes.get_max_len()
 text_pipeline = lambda x: vocab_text(tokenizer(x))
+amount_of_categories = len(vocab_sizes.get_label_dict())
 
-model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, max_length).to(device)
+
+model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, 
+                  size_hidden_layer, max_length, amount_of_categories).to(device)
+
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 optimizer_name = type(optimizer).__name__
@@ -77,7 +81,7 @@ def train(dataloader, model):
     total_loss = []
     start_time = time.time()
     n_data = len(dataloader)
-#    run["train/n_data"] = n_data
+    run["train/n_data"] = n_data
 
     for batch_idx, (batch_labels, batch_texts) in enumerate(dataloader):
         predicted_labels = model(batch_texts, batch_texts.size(0))
@@ -91,8 +95,8 @@ def train(dataloader, model):
         loss.backward()
         optimizer.step()
 
-#        run["train/batch_idx"].log(batch_idx)
-#        run["train/avg_batch_loss"].log(loss.item())#/total_count) # log average loss to neptune
+        run["train/batch_idx"].log(batch_idx)
+        run["train/avg_batch_loss"].log(loss.item())#/total_count) # log average loss to neptune
 #        run["train/avg_batch_accuracy"].log(avg_batch_accuracy) # log average accuracy to neptune
 
         if ((batch_idx+1) % log_interval == 0 and batch_idx > 0) or (batch_idx+1 == n_data):
@@ -106,7 +110,7 @@ def train(dataloader, model):
     return total_loss
 
 
-tot_loss = train(iter(train_loader), model)
+#tot_loss = train(iter(train_loader), model)
 
 
 #%% Evaluate model
@@ -154,7 +158,7 @@ def evaluate(dataloader):
             
     return accuracy, cum_loss
 
-eval_acc = evaluate(iter(val_loader))
+#eval_acc = evaluate(iter(val_loader))
 
 #%%
 
@@ -169,25 +173,26 @@ for epoch in range(epochs):
     epoch_loss = sum(epoch_loss)/len(epoch_loss)
     avg_epoch_loss.append(epoch_loss)
 
-#    run["train/avg_epoch_loss"].log(epoch_loss)    
+    run["train/avg_epoch_loss"].log(epoch_loss)    
 
     print("Initiating evaluation...")
     epoch_val_acc, epoch_val_loss = evaluate(iter(val_loader))
     epoch_val_acc_list.append(epoch_val_acc)
     epoch_val_loss_list.append(epoch_val_loss)
     
-#    run["validation/epoch_val_accuracy"].log(epoch_val_acc)
-#    run["validation/epoch_val_loss"].log(epoch_val_loss)
+    run["validation/epoch_val_accuracy"].log(epoch_val_acc)
+    run["validation/epoch_val_loss"].log(epoch_val_loss)
 
     print("Finished epoch: {}/{} "
-          "| Val_loss {:.4f} |"
-          "| Val_accuracy: {:3.2f}% ".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
+          "| Val_loss {:.4f} "
+          "| Val_accuracy: {:3.2f}% |".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
 
-torch.save(model.state_dict(), 'model_weights_12-12-03-27.pth')
+torch.save(model.state_dict(), 'model_weights_12-12-21-27.pth')
+run.stop()
 
 #%%
 model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, 
-                  size_hidden_layer, max_length).to(device) 
+                  size_hidden_layer, max_length, amount_of_categories).to(device) 
 model.load_state_dict(torch.load('model_weights_12-12-00-49.pth'))
 model.eval()
 
