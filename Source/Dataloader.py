@@ -42,7 +42,8 @@ class NewsDatasetTraining(Dataset):
         return data_point_category, data_point_headline
 
 
-def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_dataset: bool, random_seed: int):
+def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuffle_dataset: bool, random_seed: int,
+                batch_size_val=100_000, batch_size_test=100_000):
 
     tokenizer = get_tokenizer('basic_english')
     vocab_sizes = VocabSizes(tokenizer)
@@ -87,17 +88,17 @@ def get_loaders(batch_size: int, test_split: float, val_split: float, shuffle_da
         return label_list.to(device), text_list.to(device)
 
     train_loader = torch.utils.data.DataLoader(dataset,
-                                               batch_size=batch_size,
+                                               batch_size=batch_size_train,
                                                sampler=train_sampler,
                                                collate_fn=collate_batch)
 
     val_loader = torch.utils.data.DataLoader(dataset,
-                                             batch_size=100000,  # Large number chosen to get entire validation as one batch
+                                             batch_size=batch_size_val,  # Large number chosen to get entire validation as one batch
                                              sampler=val_sampler,
                                              collate_fn=collate_batch)
 
     test_loader = torch.utils.data.DataLoader(dataset,
-                                              batch_size=100000,  # Large number chosen to get entire validation as one batch
+                                              batch_size=batch_size_test,  # Large number chosen to get entire validation as one batch
                                               sampler=test_sampler,
                                               collate_fn=collate_batch)
 
