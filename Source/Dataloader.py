@@ -18,7 +18,25 @@ class NewsDatasetTraining(Dataset):
         self.df = self.df.dropna(axis=0)  # Remove rows with no category or headline
         self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
         self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
-        self.df['category'] = self.df['category'].replace({'ARTS & CULTURE': 'CULTURE & ARTS'})  # Same label
+        self.df['category'] = self.df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
+                                                           "HEALTHY LIVING": "WELLNESS",
+                                                           "QUEER VOICES": "VOICES",
+                                                           "BUSINESS": "BUSINESS & FINANCES",
+                                                           "PARENTS": "PARENTING",
+                                                           "BLACK VOICES": "VOICES",
+                                                           "THE WORLDPOST": "WORLD NEWS",
+                                                           "STYLE": "STYLE & BEAUTY",
+                                                           "GREEN": "ENVIRONMENT",
+                                                           "TASTE": "FOOD & DRINK",
+                                                           "WORLDPOST": "WORLD NEWS",
+                                                           "SCIENCE": "SCIENCE & TECH",
+                                                           "TECH": "SCIENCE & TECH",
+                                                           "MONEY": "BUSINESS & FINANCES",
+                                                           "ARTS": "CULTURE & ARTS",
+                                                           "COLLEGE": "EDUCATION",
+                                                           "LATINO VOICES": "VOICES",
+                                                           "FIFTY": "MISCELLANEOUS",
+                                                           "GOOD NEWS": "MISCELLANEOUS"})  # Group some categories
         self.df['headline'] = self.df['headline'].str.lower()  # All headlines in lower case
 
     def __len__(self):
