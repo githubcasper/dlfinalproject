@@ -13,7 +13,7 @@ vocab_size, vocab_text = vocab_sizes.get_vocab_size_text()
 amount_of_categories = len(vocab_sizes.get_label_dict())
 max_length = vocab_sizes.get_max_len()
 
-train_loader, val_loader, test_loader = get_loaders(batch_size=300,
+train_loader, val_loader, test_loader = get_loaders(batch_size_train=300,
                                                     test_split=0.025,
                                                     val_split=0.025,
                                                     shuffle_dataset=True,
