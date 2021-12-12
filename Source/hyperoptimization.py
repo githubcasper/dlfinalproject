@@ -17,7 +17,7 @@ train_loader, val_loader, test_loader = get_loaders(batch_size=300,
                                                     val_split=0.025,
                                                     shuffle_dataset=True,
                                                     random_seed=123)
-
+#%%
 
 def best_hyper(set_of_hyper):
     print(set_of_hyper)
@@ -34,9 +34,10 @@ def best_hyper(set_of_hyper):
 
     def train(train_loader, model):
         model.train()
-        for idx, (label, text) in enumerate(train_loader):
-            if idx % 50 == 0:
-                print(f'Batch index: {idx}')
+        for batch_idx, (label, text) in enumerate(train_loader):
+            if batch_idx % 50 == 0:
+                print('Batch index: {:4d}/{:4d}'.format(batch_idx, len(train_loader)))
+                break
 
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze() if predicted_label.size(0) > 1 else predicted_label.squeeze().unsqueeze(0)
@@ -50,21 +51,26 @@ def best_hyper(set_of_hyper):
         model.eval()
 
         with torch.no_grad():
-            for idx, (label, text) in enumerate(val_loader):
-                predicted_label = model(text, text.size(0))
-                loss = criterion(predicted_label.squeeze(), label)
-
+            for idx, (labels, texts) in enumerate(val_loader):
+                #labels, texts = val_loader
+                print(texts)
+                print(texts.size(0))
+                predicted_labels = model(texts, texts.size(0))
+                loss = criterion(predicted_labels.squeeze(), labels)
+                
         return loss
-
-    epochs = 2
+    
+    # training session
+    epochs = 1
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
-
+    
+    # validation session
     val_loss = evaluate(iter(val_loader))
-
+    print("Validation loss:", val_loss.item())
     return val_loss.item()
 
+best_parameter_ = get_best_hyper(best_hyper)
+print(best_parameter_)
 
-best_parameter = get_best_hyper(best_hyper)
-print(best_parameter)
