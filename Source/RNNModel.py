@@ -3,14 +3,13 @@ from torch import nn
 from torchtext.vocab import build_vocab_from_iterator
 from VocabDataloader import loader_for_vocab
 import torch.nn.functional as F
-from torchtext.data.utils import get_tokenizer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class LSTMModel(nn.Module):
 
-    def __init__(self, vocab_size, embed_dim, dropout, num_hidden_layers, size_hidden_layer, max_length):
+    def __init__(self, vocab_size, embed_dim, dropout, num_hidden_layers, size_hidden_layer, max_length, classes):
         super(LSTMModel, self).__init__()
         self.size_embed = embed_dim
         self.size_hidden_layer = size_hidden_layer
@@ -25,7 +24,7 @@ class LSTMModel(nn.Module):
                            bidirectional=True,
                            batch_first=True)
 
-        self.out = nn.Linear(self.size_hidden_layer * max_length * 2, 40)  # 40 different classes
+        self.out = nn.Linear(self.size_hidden_layer * max_length * 2, classes)  # 40 different classes
         self.dropout = nn.Dropout(p=self.dropout_p)
         self.init_weights()
 
@@ -77,20 +76,6 @@ class VocabSizes():
         vocab_text = build_vocab_from_iterator(self.yield_tokens_text(self, train_iter), specials=["<unk>"])
         vocab_text.set_default_index(vocab_text["<unk>"])
         return len(vocab_text), vocab_text
-
-#    @staticmethod
-#    def yield_tokens_label(self, data_iter):
-#        for label, text in data_iter:
-#            yield self.tokenizer(label[0])
-#
-#    def get_vocab_size_label(self):
-#        train_iter = iter(self.train_loader)
-#        count = 1
-#        for label, text in train_iter:
-#
-#        vocab_label = build_vocab_from_iterator(self.yield_tokens_label(self, train_iter), specials=["<unk>"])
-#        vocab_label.set_default_index(vocab_label["<unk>"])
-#        return len(vocab_label), vocab_label
 
     def get_max_len(self):
         return self.max_len
