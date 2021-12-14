@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, SubsetRandomSampler
 import torch
 from RNNModel import VocabSizes
 from torchtext.data.utils import get_tokenizer
+from collections import Counter
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,16 +43,9 @@ class NewsDatasetTraining(Dataset):
     def __len__(self):
         return len(self.df)
 
-    @staticmethod
-    def str_to_ints(string, input_length, vocab):
-        input_list = vocab(string)
-        while len(input_list) < input_length:
-            input_list.append(vocab('<pad>')[0])
-        return input_list
-
-    @staticmethod
-    def label_to_int(string, vocab):
-        return vocab[string]
+    def get_counter_of_labels(self):
+        label_occurence = Counter(self.df['category']).most_common()
+        return {i[0]: len(self.df) / (len(label_occurence) * i[1]) for i in label_occurence}
 
     def __getitem__(self, idx):
         data_row = self.df.iloc[idx, :]
@@ -78,6 +72,8 @@ def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuf
 
     amount_of_data = len(df)
     dataset = NewsDatasetTraining(data_path, max_length, text_pipeline, vocab_label)
+
+    class_weights = dataset.get_counter_of_labels()
 
     # Create indices to randomly split data into training and test sets:
     indices = list(range(amount_of_data))
@@ -120,5 +116,5 @@ def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuf
                                               sampler=test_sampler,
                                               collate_fn=collate_batch)
 
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader, class_weights
 

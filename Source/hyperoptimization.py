@@ -1,5 +1,4 @@
 from Call_Hyperopt import get_best_hyper
-import statistics
 import torch
 from torch import nn
 from RNNModel import LSTMModel, VocabSizes
@@ -11,17 +10,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = get_tokenizer('basic_english')
 vocab_sizes = VocabSizes(tokenizer)
 vocab_size, vocab_text = vocab_sizes.get_vocab_size_text()
-amount_of_categories = len(vocab_sizes.get_label_dict())
+label_dict = vocab_sizes.get_label_dict()
+amount_of_categories = len(label_dict)
 max_length = vocab_sizes.get_max_len()
 
-train_loader, val_loader, test_loader = get_loaders(batch_size_train=300,
-                                                    batch_size_val=300,
-                                                    batch_size_test=300,
-                                                    test_split=0.1,
-                                                    val_split=0.1,
-                                                    shuffle_dataset=True,
-                                                    random_seed=123)
+train_loader, val_loader, test_loader, class_weights_ = get_loaders(batch_size_train=300,
+                                                                    batch_size_val=300,
+                                                                    batch_size_test=300,
+                                                                    test_split=0.1,
+                                                                    val_split=0.1,
+                                                                    shuffle_dataset=True,
+                                                                    random_seed=123)
 #%%
+
 
 def best_hyper(set_of_hyper):
     print(set_of_hyper)
@@ -31,13 +32,17 @@ def best_hyper(set_of_hyper):
     dropout = float(set_of_hyper['dropout'])
     dropout_lstm = float(set_of_hyper['dropout_lstm'])
     lr = float(set_of_hyper['LR'])
-    weight_decay = float(set_of_hyper['weight_decay'])
+    class_weights = int(set_of_hyper['class_weights'])
 
     model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, amount_of_categories).to(device)
 
-    criterion = nn.CrossEntropyLoss()
-    criterion2 = nn.CrossEntropyLoss(reduction='sum')
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if class_weights:
+        class_weights = sorted([[label_dict[i[0]], i[1]] for i in class_weights_.items()], key=lambda x: x[0])
+        class_weights = torch.Tensor([i[1] for i in class_weights])
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion2 = nn.CrossEntropyLoss(reduction='sum', weight=class_weights)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
     def train(train_loader, model):
         model.train()
@@ -46,7 +51,7 @@ def best_hyper(set_of_hyper):
                 print('Batch index: {:4d}/{:4d}'.format(batch_idx, len(train_loader)))
 
             predicted_label = model(text, text.size(0))
-            predicted_label = predicted_label.squeeze() if predicted_label.size(0) > 1 else predicted_label.squeeze().unsqueeze(0)
+            predicted_label = predicted_label.squeeze(1)
             loss = criterion(predicted_label, label)
             optimizer.zero_grad()
             loss.backward()
@@ -65,7 +70,7 @@ def best_hyper(set_of_hyper):
         return loss / count
     
     # training session
-    epochs = 1
+    epochs = 3
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
