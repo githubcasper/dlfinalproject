@@ -60,7 +60,7 @@ def best_hyper(set_of_hyper):
         model.train()
         for batch_idx, (label, text) in enumerate(train_loader):
             if ((batch_idx+1) % 100 == 0) or (len(train_loader) == batch_idx+1):
-                print('Batch index: {:4d}/{:4d}'.format(batch_idx+1, len(train_loader)))
+                print('Trained batches: {:3d}/{:3d}'.format(batch_idx+1, len(train_loader)))
 
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze(1)
@@ -84,7 +84,7 @@ def best_hyper(set_of_hyper):
     # training session
     epochs = 6
     for epoch in range(epochs):
-        print(f'Epoch: {epoch}')
+        print('Initiating epoch: {}/{}'.format(epoch+1, epochs))
         train(iter(train_loader), model)
     
     # validation session
