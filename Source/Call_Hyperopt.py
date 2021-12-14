@@ -13,3 +13,15 @@ def get_best_hyper(objective):
     best = fmin(objective, space, algo=tpe.suggest, max_evals=30, trials=trials)
     print(trials.trials)
     return best
+
+
+
+
+
+
+
+
+
+
+
+
