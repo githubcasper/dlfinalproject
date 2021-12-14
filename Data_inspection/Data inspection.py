@@ -2,11 +2,15 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 
+# This file is not really used anymore. Only the plots in the [COLUMN] distribution is used
+
 df = pd.read_json('../Data/News_Category_Dataset_v2.json', lines=True)[['category', 'headline']]
 pd.set_option('display.max_columns', 100)
 df = df.loc[df['headline'].str.len() > 0]
 df = df.dropna(axis=0)  # Remove rows with no category or headline
-df = df.loc[df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
+df = df.loc[df['headline'].str.len() <= 120]  # Remove rows where length of headline is above 120
+df = df.loc[df['short_description'].str.len() > 0]
+df = df.loc[df['short_description'].str.len() <= 300]  # Remove rows where length of headline is above 300
 df['category'] = df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "HEALTHY LIVING": "WELLNESS",
                                                            "QUEER VOICES": "VOICES",
@@ -27,6 +31,7 @@ df['category'] = df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "FIFTY": "MISCELLANEOUS",
                                                            "GOOD NEWS": "MISCELLANEOUS"})  # Group some categories
 df['headline'] = df['headline'].str.lower()  # All headlines in lower case
+df['short_description'] = df['short_description'].str.lower()  # All headlines in lower case
 #print(df.head())
 
 label_occurence = Counter(df['category']).most_common()
