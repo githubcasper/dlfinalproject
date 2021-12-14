@@ -40,7 +40,6 @@ def best_hyper(set_of_hyper):
                       dropout_lstm=dropout_lstm,
                       num_hidden_layers=num_hidden_layers,
                       size_hidden_layer=size_hidden_layer,
-                      max_length=max_length,
                       classes=amount_of_categories).to(device)
 
     if class_weights:
@@ -52,7 +51,7 @@ def best_hyper(set_of_hyper):
         criterion = nn.CrossEntropyLoss()
         criterion2 = nn.CrossEntropyLoss(reduction='sum')
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     def train(train_loader, model):
         model.train()
@@ -80,14 +79,15 @@ def best_hyper(set_of_hyper):
         return loss / count
     
     # training session
-    epochs = 3
+    epochs = 10
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
+        # validation session
+        val_loss = evaluate(iter(val_loader))
+        print("Validation loss:", val_loss)
     
-    # validation session
-    val_loss = evaluate(iter(val_loader))
-    print("Validation loss:", val_loss)
+
     return val_loss
 
 

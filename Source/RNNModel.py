@@ -9,15 +9,16 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class LSTMModel(nn.Module):
 
-    def __init__(self, vocab_size, embed_dim, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, classes):
+    def __init__(self, vocab_size, embed_dim, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, classes):
         super(LSTMModel, self).__init__()
         self.size_embed = embed_dim
         self.size_hidden_layer = size_hidden_layer
         self.num_hidden_layers = num_hidden_layers
         self.dropout_p = dropout
         self.dropout_lstm_p = dropout_lstm
+        self.vocab_size = vocab_size
 
-        self.embedding = nn.Embedding(vocab_size, self.size_embed, sparse=False)
+        self.embedding = nn.Embedding(self.vocab_size, self.size_embed, sparse=False)
 
         self.rnn = nn.LSTM(input_size=self.size_embed,
                            hidden_size=self.size_hidden_layer,
@@ -26,9 +27,12 @@ class LSTMModel(nn.Module):
                            dropout=self.dropout_lstm_p,
                            batch_first=True)
 
-        self.out = nn.Linear(self.size_hidden_layer * max_length * 2, classes)  # 40 different classes
+        self.out = nn.Linear(self.size_hidden_layer, classes)
+
+        self.attn_combine = nn.Linear(self.size_hidden_layer * 4, self.size_hidden_layer)
+        self.attn = nn.Linear(2 * self.size_hidden_layer, 2 * self.size_hidden_layer)  # Attention
+
         self.dropout = nn.Dropout(p=self.dropout_p)
-        self.dropout_lstm = nn.Dropout(p=self.dropout_lstm_p)
         self.init_weights()
 
     def init_weights(self):
@@ -44,13 +48,25 @@ class LSTMModel(nn.Module):
 
     def forward(self, text, batch_size):
         hidden = (self.initHidden(batch_size), self.initHidden(batch_size))
-        embedded = self.embedding(text)
-        embedded = self.dropout(embedded)
+        embedded = self.embedding(text)  # Get embedding
+        embedded = self.dropout(embedded)  # Apply dropout
 
-        output, hidden = self.rnn(embedded, hidden)
-        output = self.dropout_lstm(output)
-        output = self.out(output.reshape(batch_size, 1, -1))
-        return F.log_softmax(output, dim=0)
+        output, hidden = self.rnn(embedded, hidden)  # Apply LSTM
+
+        final_hidden = hidden[0].view(self.num_hidden_layers, 2, batch_size, self.size_hidden_layer)[-1]
+        final_hidden = torch.cat((final_hidden[0], final_hidden[1]), 1)  # Used for attention
+
+        attn_weights = self.attn(output)
+        attn_weights = torch.bmm(attn_weights, final_hidden.unsqueeze(2))
+        attn_weights = F.softmax(attn_weights.squeeze(2), dim=1)  # Calculate attention weights
+
+        context = torch.bmm(output.transpose(1, 2), attn_weights.unsqueeze(2)).squeeze(2)  # Calculate context
+
+        output = self.attn_combine(torch.cat((context, final_hidden), 1))  # Combine context with final hidden layer
+
+        output = self.out(output.reshape(batch_size, 1, -1))  # Apply final fully connected layer
+
+        return F.log_softmax(output, dim=0)  # log_softmax because Cross Entropy is our loss function
 
     def initHidden(self, batch_size):
         return torch.zeros(2 * self.num_hidden_layers, batch_size, self.size_hidden_layer, device=device)
