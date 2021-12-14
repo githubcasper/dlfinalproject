@@ -31,6 +31,7 @@ class NewsDataset(Dataset):
                                                            "FIFTY": "MISCELLANEOUS",
                                                            "GOOD NEWS": "MISCELLANEOUS"})  # Group some categories
         self.df['headline'] = self.df['headline'].str.lower()  # All headlines in lower case
+        self.df['short_description'] = self.df['short_description'].str.lower()  # All headlines in lower case
 
     def __len__(self):
         return len(self.df)
@@ -38,8 +39,9 @@ class NewsDataset(Dataset):
     def __getitem__(self, idx):
         data_row = self.df.iloc[idx, :]
         data_point_category = data_row[0]
-        data_point_headline = data_row[1]
-        return data_point_category, data_point_headline
+        #data_point_headline = data_row[1]
+        data_point_concatenation = data_row[3]
+        return data_point_category, data_point_concatenation
 
 
 def loader_for_vocab():
