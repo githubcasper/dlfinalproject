@@ -21,6 +21,8 @@ train_loader, val_loader, test_loader, class_weights_ = get_loaders(batch_size_t
                                                                     val_split=0.1,
                                                                     shuffle_dataset=True,
                                                                     random_seed=123)
+
+
 #%%
 
 
@@ -28,11 +30,11 @@ def best_hyper(set_of_hyper):
     print(set_of_hyper)
     num_hidden_layers = int(set_of_hyper['num_hidden_layers'])
     size_hidden_layer = int(set_of_hyper['size_hidden_layer'])
-    emsize = int(set_of_hyper['size_embed'])
-    dropout = float(set_of_hyper['dropout'])
-    dropout_lstm = float(set_of_hyper['dropout_lstm'])
-    lr = float(set_of_hyper['LR'])
-    class_weights = int(set_of_hyper['class_weights'])
+    emsize            = int(set_of_hyper['size_embed'])
+    dropout           = float(set_of_hyper['dropout'])
+    dropout_lstm      = float(set_of_hyper['dropout_lstm'])
+    lr                = float(set_of_hyper['LR'])
+    class_weights     = int(set_of_hyper['class_weights'])
 
     model = LSTMModel(vocab_size=vocab_size,
                       embed_dim=emsize,
@@ -45,20 +47,20 @@ def best_hyper(set_of_hyper):
 
     if class_weights:
         class_weights = sorted([[label_dict[i[0]], i[1]] for i in class_weights_.items()], key=lambda x: x[0])
-        class_weights = torch.Tensor([i[1] for i in class_weights])
+        class_weights = torch.Tensor([i[1] for i in class_weights]).to(device)
         criterion = nn.CrossEntropyLoss(weight=class_weights)
         criterion2 = nn.CrossEntropyLoss(reduction='sum', weight=class_weights)
     else:
         criterion = nn.CrossEntropyLoss()
         criterion2 = nn.CrossEntropyLoss(reduction='sum')
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     def train(train_loader, model):
         model.train()
         for batch_idx, (label, text) in enumerate(train_loader):
-            if batch_idx % 50 == 0:
-                print('Batch index: {:4d}/{:4d}'.format(batch_idx, len(train_loader)))
+            if ((batch_idx+1) % 100 == 0) or (len(train_loader) == batch_idx+1):
+                print('Batch index: {:4d}/{:4d}'.format(batch_idx+1, len(train_loader)))
 
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze(1)
@@ -80,7 +82,7 @@ def best_hyper(set_of_hyper):
         return loss / count
     
     # training session
-    epochs = 3
+    epochs = 6
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
