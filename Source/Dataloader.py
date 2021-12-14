@@ -15,10 +15,12 @@ class NewsDatasetTraining(Dataset):
         self.label_dict = label_dict
         self.vocab = vocab
         self.input_length = input_length
-        self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]  # Load data, but only keep columns of interest
+        self.df = pd.read_json(json_path, lines=True)[['category', 'headline', 'short_description']]  # Load data, but only keep columns of interest
         self.df = self.df.dropna(axis=0)  # Remove rows with no category or headline
         self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
-        self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
+        self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove rows where length of headline is above 120
+        self.df = self.df.loc[self.df['short_description'].str.len() > 0]  # Remove rows where short_description is empty string
+        self.df = self.df.loc[self.df['short_description'].str.len() <= 300]  # Remove rows where length of short_description is above 300
         self.df['category'] = self.df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "HEALTHY LIVING": "WELLNESS",
                                                            "QUEER VOICES": "VOICES",
@@ -39,6 +41,8 @@ class NewsDatasetTraining(Dataset):
                                                            "FIFTY": "MISCELLANEOUS",
                                                            "GOOD NEWS": "MISCELLANEOUS"})  # Group some categories
         self.df['headline'] = self.df['headline'].str.lower()  # All headlines in lower case
+        self.df['short_description'] = self.df['short_description'].str.lower()  # All headlines in lower case
+        self.df['concatenation'] = self.df['headline'] + self.df['short_description']
 
     def __len__(self):
         return len(self.df)
@@ -50,8 +54,9 @@ class NewsDatasetTraining(Dataset):
     def __getitem__(self, idx):
         data_row = self.df.iloc[idx, :]
         data_point_category = data_row[0]
-        data_point_headline = data_row[1]
-        return data_point_category, data_point_headline
+        #data_point_headline = data_row[1]
+        data_point_concatenation = data_row[3]
+        return data_point_category, data_point_concatenation
 
 
 def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuffle_dataset: bool, random_seed: int,
@@ -69,6 +74,8 @@ def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuf
     df = df.dropna(axis=0)  # Remove rows with no category or headline
     df = df.loc[df['headline'].str.len() > 0]  # Remove rows where headline is empty string
     df = df.loc[df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
+    df = df.loc[df['short_description'].str.len() > 0]  # Remove rows where headline is empty string
+    df = df.loc[df['short_description'].str.len() <= 300]  # Remove 274 rows where length of headline is above 120
 
     amount_of_data = len(df)
     dataset = NewsDatasetTraining(data_path, max_length, text_pipeline, vocab_label)

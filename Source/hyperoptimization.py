@@ -34,14 +34,24 @@ def best_hyper(set_of_hyper):
     lr = float(set_of_hyper['LR'])
     class_weights = int(set_of_hyper['class_weights'])
 
-    model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, amount_of_categories).to(device)
+    model = LSTMModel(vocab_size=vocab_size,
+                      embed_dim=emsize,
+                      dropout=dropout,
+                      dropout_lstm=dropout_lstm,
+                      num_hidden_layers=num_hidden_layers,
+                      size_hidden_layer=size_hidden_layer,
+                      max_length=max_length,
+                      classes=amount_of_categories).to(device)
 
     if class_weights:
         class_weights = sorted([[label_dict[i[0]], i[1]] for i in class_weights_.items()], key=lambda x: x[0])
         class_weights = torch.Tensor([i[1] for i in class_weights])
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
+        criterion2 = nn.CrossEntropyLoss(reduction='sum', weight=class_weights)
+    else:
+        criterion = nn.CrossEntropyLoss()
+        criterion2 = nn.CrossEntropyLoss(reduction='sum')
 
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
-    criterion2 = nn.CrossEntropyLoss(reduction='sum', weight=class_weights)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
     def train(train_loader, model):

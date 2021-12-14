@@ -5,10 +5,12 @@ import torch
 
 class NewsDataset(Dataset):
     def __init__(self, json_path):
-        self.df = pd.read_json(json_path, lines=True)[['category', 'headline']]  # Load data, but only keep columns of interest
+        self.df = pd.read_json(json_path, lines=True)[['category', 'headline', 'short_description']]  # Load data, but only keep columns of interest
         self.df = self.df.dropna(axis=0)  # Remove rows with no category or headline
         self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
-        self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
+        self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove rows where length of headline is above 120
+        self.df = self.df.loc[self.df['short_description'].str.len() > 0]  # Remove rows where short_description is empty string
+        self.df = self.df.loc[self.df['short_description'].str.len() <= 300]  # Remove rows where length of short_description is above 300
         self.df['category'] = self.df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "HEALTHY LIVING": "WELLNESS",
                                                            "QUEER VOICES": "VOICES",
