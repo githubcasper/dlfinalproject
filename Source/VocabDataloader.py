@@ -32,6 +32,7 @@ class NewsDataset(Dataset):
                                                            "GOOD NEWS": "MISCELLANEOUS"})  # Group some categories
         self.df['headline'] = self.df['headline'].str.lower()  # All headlines in lower case
         self.df['short_description'] = self.df['short_description'].str.lower()  # All headlines in lower case
+        self.df['concatenation'] = self.df['headline'] + self.df['short_description']
 
     def __len__(self):
         return len(self.df)
