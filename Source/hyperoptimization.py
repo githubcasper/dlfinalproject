@@ -1,4 +1,5 @@
 from Call_Hyperopt import get_best_hyper
+import statistics
 import torch
 from torch import nn
 from RNNModel import LSTMModel, VocabSizes
@@ -14,8 +15,10 @@ amount_of_categories = len(vocab_sizes.get_label_dict())
 max_length = vocab_sizes.get_max_len()
 
 train_loader, val_loader, test_loader = get_loaders(batch_size_train=300,
-                                                    test_split=0.025,
-                                                    val_split=0.025,
+                                                    batch_size_val=300,
+                                                    batch_size_test=300,
+                                                    test_split=0.1,
+                                                    val_split=0.1,
                                                     shuffle_dataset=True,
                                                     random_seed=123)
 #%%
@@ -33,6 +36,7 @@ def best_hyper(set_of_hyper):
     model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, amount_of_categories).to(device)
 
     criterion = nn.CrossEntropyLoss()
+    criterion2 = nn.CrossEntropyLoss(reduction='sum')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     def train(train_loader, model):
@@ -50,24 +54,26 @@ def best_hyper(set_of_hyper):
 
     def evaluate(val_loader):
         model.eval()
-
+        loss = 0
+        count = 0
         with torch.no_grad():
             for idx, (labels, texts) in enumerate(val_loader):
                 predicted_labels = model(texts, texts.size(0))
-                loss = criterion(predicted_labels.squeeze(), labels)
-                
-        return loss
+                loss += criterion2(predicted_labels.squeeze(), labels).item()
+                count += len(labels)
+
+        return loss / count
     
     # training session
-    epochs = 3
+    epochs = 1
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
     
     # validation session
     val_loss = evaluate(iter(val_loader))
-    print("Validation loss:", val_loss.item())
-    return val_loss.item()
+    print("Validation loss:", val_loss)
+    return val_loss
 
 
 best_parameter_ = get_best_hyper(best_hyper)
