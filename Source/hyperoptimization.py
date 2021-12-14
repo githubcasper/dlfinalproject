@@ -26,12 +26,14 @@ def best_hyper(set_of_hyper):
     size_hidden_layer = int(set_of_hyper['size_hidden_layer'])
     emsize = int(set_of_hyper['size_embed'])
     dropout = float(set_of_hyper['dropout'])
+    dropout_lstm = float(set_of_hyper['dropout_lstm'])
     lr = float(set_of_hyper['LR'])
+    weight_decay = float(set_of_hyper['weight_decay'])
 
-    model = LSTMModel(vocab_size, emsize, dropout, num_hidden_layers, size_hidden_layer, max_length, amount_of_categories).to(device)
+    model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, amount_of_categories).to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     def train(train_loader, model):
         model.train()
@@ -57,7 +59,7 @@ def best_hyper(set_of_hyper):
         return loss
     
     # training session
-    epochs = 2
+    epochs = 3
     for epoch in range(epochs):
         print(f'Epoch: {epoch}')
         train(iter(train_loader), model)
@@ -70,4 +72,3 @@ def best_hyper(set_of_hyper):
 
 best_parameter_ = get_best_hyper(best_hyper)
 print(best_parameter_)
-

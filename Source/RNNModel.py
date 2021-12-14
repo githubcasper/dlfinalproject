@@ -9,12 +9,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class LSTMModel(nn.Module):
 
-    def __init__(self, vocab_size, embed_dim, dropout, num_hidden_layers, size_hidden_layer, max_length, classes):
+    def __init__(self, vocab_size, embed_dim, dropout, dropout_lstm, num_hidden_layers, size_hidden_layer, max_length, classes):
         super(LSTMModel, self).__init__()
         self.size_embed = embed_dim
         self.size_hidden_layer = size_hidden_layer
         self.num_hidden_layers = num_hidden_layers
         self.dropout_p = dropout
+        self.dropout_lstm_p = dropout_lstm
 
         self.embedding = nn.Embedding(vocab_size, self.size_embed, sparse=False)
 
@@ -22,10 +23,12 @@ class LSTMModel(nn.Module):
                            hidden_size=self.size_hidden_layer,
                            num_layers=self.num_hidden_layers,
                            bidirectional=True,
+                           dropout=self.dropout_lstm_p,
                            batch_first=True)
 
         self.out = nn.Linear(self.size_hidden_layer * max_length * 2, classes)  # 40 different classes
         self.dropout = nn.Dropout(p=self.dropout_p)
+        self.dropout_lstm = nn.Dropout(p=self.dropout_lstm_p)
         self.init_weights()
 
     def init_weights(self):
@@ -45,6 +48,7 @@ class LSTMModel(nn.Module):
         embedded = self.dropout(embedded)
 
         output, hidden = self.rnn(embedded, hidden)
+        output = self.dropout_lstm(output)
         output = self.out(output.reshape(batch_size, 1, -1))
         return F.log_softmax(output, dim=0)
 
