@@ -12,23 +12,19 @@ from RNNModel import LSTMModel, VocabSizes
 import time
 import torch
 from torch import nn
-#import torch.nn.functional as F
 from torchtext.data.utils import get_tokenizer
-from torchtext.vocab import build_vocab_from_iterator
-from torch.utils.data.dataset import random_split
-from torchtext.data.functional import to_map_style_dataset
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 #%% Model setup
-neptune_on        = False
-num_hidden_layers = 1
-size_hidden_layer = 43
-emsize            = 67
-dropout           = 0.4501
-dropout_lstm      = 0.5
+neptune_on        = True
+num_hidden_layers = 6
+size_hidden_layer = 96
+emsize            = 106
+dropout           = 0.4888
+dropout_lstm      = 0.0450
 batch_size        = 300
-learning_rate     = 0.01
+learning_rate     = 0.001
 class_weights     = 1
 
 train_loader, val_loader, test_loader, class_weights_ = get_loaders(batch_size_train=batch_size,
@@ -79,8 +75,10 @@ if neptune_on:
               "Size of hidden layer":    size_hidden_layer,
               "Embedding size":          emsize,
               "Dropout":                 dropout,
+              "Dropout (lstm)":          dropout_lstm,
               "Batch size":              batch_size,
-              "Learning rate":           learning_rate, 
+              "Learning rate":           learning_rate,
+              "Class weights":           class_weights,
               "Optimizer":               optimizer_name}
     
     run["parameters"] = params
@@ -171,7 +169,7 @@ def evaluate(dataloader, model):
 
 #%% Epoch loop
 
-epochs = 3
+epochs = 50
 avg_epoch_loss = []
 epoch_val_acc_list = []
 epoch_val_loss_list = []
@@ -199,7 +197,7 @@ for epoch in range(epochs):
 
     if epoch_val_loss < best_loss:
         best_loss = epoch_val_loss
-        torch.save(model.state_dict(), 'model_weights_best_val_loss.pth')
+        torch.save(model.state_dict(), 'model_weights_best_val_loss_12-15-03-48.pth')
     
  
 
@@ -207,7 +205,7 @@ for epoch in range(epochs):
           "| Val_loss {:.4f} "
           "| Val_accuracy: {:3.2f}% |".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
 
-torch.save(model.state_dict(), 'model_weights_12-14-13-25.pth')
+torch.save(model.state_dict(), 'model_weights_12-15-03-48.pth')
 
 if neptune_on:
     run.stop()
