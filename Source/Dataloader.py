@@ -20,7 +20,9 @@ class NewsDatasetTraining(Dataset):
         self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
         self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove rows where length of headline is above 120
         self.df = self.df.loc[self.df['short_description'].str.len() > 0]  # Remove rows where short_description is empty string
-        self.df = self.df.loc[self.df['short_description'].str.len() <= 300]  # Remove rows where length of short_description is above 300
+        self.df = self.df.loc[self.df['short_description'].str.len() < 320]  # Remove rows where length of short_description is above 300
+        self.df = self.df.loc[(self.df['short_description'].str.len() < 120) | (131 < self.df['short_description'].str.len())]
+        
         self.df['category'] = self.df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "HEALTHY LIVING": "WELLNESS",
                                                            "QUEER VOICES": "VOICES",
@@ -70,15 +72,8 @@ def get_loaders(batch_size_train: int, test_split: float, val_split: float, shuf
     text_pipeline = lambda x: vocab_text(tokenizer(x))
 
     data_path = '../Data/News_Category_Dataset_v2.json'
-    df = pd.read_json(data_path, lines=True)
-    df = df.dropna(axis=0)  # Remove rows with no category or headline
-    df = df.loc[df['headline'].str.len() > 0]  # Remove rows where headline is empty string
-    df = df.loc[df['headline'].str.len() <= 120]  # Remove 274 rows where length of headline is above 120
-    df = df.loc[df['short_description'].str.len() > 0]  # Remove rows where headline is empty string
-    df = df.loc[df['short_description'].str.len() <= 300]  # Remove 274 rows where length of headline is above 120
-
-    amount_of_data = len(df)
     dataset = NewsDatasetTraining(data_path, max_length, text_pipeline, vocab_label)
+    amount_of_data = len(dataset)
 
     class_weights = dataset.get_counter_of_labels()
 

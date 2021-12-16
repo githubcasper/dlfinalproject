@@ -10,7 +10,8 @@ class NewsDataset(Dataset):
         self.df = self.df.loc[self.df['headline'].str.len() > 0]  # Remove rows where headline is empty string
         self.df = self.df.loc[self.df['headline'].str.len() <= 120]  # Remove rows where length of headline is above 120
         self.df = self.df.loc[self.df['short_description'].str.len() > 0]  # Remove rows where short_description is empty string
-        self.df = self.df.loc[self.df['short_description'].str.len() <= 300]  # Remove rows where length of short_description is above 300
+        self.df = self.df.loc[self.df['short_description'].str.len() < 320]  # Remove rows where length of short_description is above 300
+        self.df = self.df.loc[(self.df['short_description'].str.len() < 120) | (131 < self.df['short_description'].str.len())]
         self.df['category'] = self.df['category'].replace({"ARTS & CULTURE": "CULTURE & ARTS",
                                                            "HEALTHY LIVING": "WELLNESS",
                                                            "QUEER VOICES": "VOICES",
