@@ -22,7 +22,7 @@ num_hidden_layers = 6
 size_hidden_layer = 96
 emsize            = 106
 dropout           = 0.4888
-dropout_lstm      = 0.0450
+dropout_lstm      = 0.045
 batch_size        = 300
 learning_rate     = 0.001
 class_weights     = 1
@@ -45,8 +45,13 @@ text_pipeline          = lambda x: vocab_text(tokenizer(x))
 amount_of_categories   = len(vocab_sizes.get_label_dict())
 
 
-model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, 
-                  size_hidden_layer, max_length, amount_of_categories).to(device)
+model = LSTMModel(vocab_size, 
+                  emsize, 
+                  dropout, 
+                  dropout_lstm, 
+                  num_hidden_layers, 
+                  size_hidden_layer, 
+                  amount_of_categories).to(device)
 
 
 if class_weights:
@@ -62,7 +67,7 @@ else:
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 optimizer_name = type(optimizer).__name__
-
+scheduler_name = type(scheduler).__name__
 
 #%% Neptune
 if neptune_on:
@@ -79,7 +84,8 @@ if neptune_on:
               "Batch size":              batch_size,
               "Learning rate":           learning_rate,
               "Class weights":           class_weights,
-              "Optimizer":               optimizer_name}
+              "Optimizer":               optimizer_name,
+              "Scheduler":               scheduler_name}
     
     run["parameters"] = params
 
@@ -142,7 +148,6 @@ def evaluate(dataloader, model):
             batch_class_preds = predicted_labels.argmax(2).squeeze()
 
             count += len(labels)
-
             loss += criterion2(predicted_labels.squeeze(), labels)
             cum_loss = loss / count
             
@@ -155,8 +160,8 @@ def evaluate(dataloader, model):
             if ((idx+1) % 25 == 0 and idx > 0) or (idx+1 == n_data):
                 elapsed = round(time.time() - start_time, 2)
                 print("| {:3d}/{:3d} batches "
-                      "| validation_loss: {:.4f} "
-                      "| validation_accuracy: {:3.2f}% "
+                      "| val_loss: {:.4f} "
+                      "| val_accuracy: {:3.2f}% "
                       "| time elapsed: {:5.1f}s |".format(idx+1,
                                                           n_data,
                                                           cum_loss,
@@ -165,7 +170,8 @@ def evaluate(dataloader, model):
             
     return accuracy, cum_loss
 
-#eval_acc = evaluate(iter(val_loader), model)
+
+#eval_acc = evaluate(iter(test_loader), model)
 
 #%% Epoch loop
 
@@ -197,7 +203,7 @@ for epoch in range(epochs):
 
     if epoch_val_loss < best_loss:
         best_loss = epoch_val_loss
-        torch.save(model.state_dict(), 'model_weights_best_val_loss_12-15-03-48.pth')
+        torch.save(model.state_dict(), 'model_weights_best_val_loss_12-16-07-15.pth')
     
  
 
@@ -205,7 +211,7 @@ for epoch in range(epochs):
           "| Val_loss {:.4f} "
           "| Val_accuracy: {:3.2f}% |".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
 
-torch.save(model.state_dict(), 'model_weights_12-15-03-48.pth')
+torch.save(model.state_dict(), 'model_weights_12-16-07-15.pth')
 
 if neptune_on:
     run.stop()

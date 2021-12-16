@@ -36,13 +36,13 @@ def best_hyper(set_of_hyper):
     lr                = float(set_of_hyper['LR'])
     class_weights     = int(set_of_hyper['class_weights'])
 
-    model = LSTMModel(vocab_size=vocab_size,
-                      embed_dim=emsize,
-                      dropout=dropout,
-                      dropout_lstm=dropout_lstm,
-                      num_hidden_layers=num_hidden_layers,
-                      size_hidden_layer=size_hidden_layer,
-                      classes=amount_of_categories).to(device)
+    model = LSTMModel(vocab_size        = vocab_size,
+                      embed_dim         = emsize,
+                      dropout           = dropout,
+                      dropout_lstm      = dropout_lstm,
+                      num_hidden_layers = num_hidden_layers,
+                      size_hidden_layer = size_hidden_layer,
+                      classes           = amount_of_categories).to(device)
 
     if class_weights:
         class_weights = sorted([[label_dict[i[0]], i[1]] for i in class_weights_.items()], key=lambda x: x[0])
@@ -59,7 +59,7 @@ def best_hyper(set_of_hyper):
         model.train()
         for batch_idx, (label, text) in enumerate(train_loader):
             if ((batch_idx+1) % 100 == 0) or (len(train_loader) == batch_idx+1):
-                print('Trained batches: {:3d}/{:3d}'.format(batch_idx+1, len(train_loader)))
+                print('Finished training {:3d}/{:3d} batches'.format(batch_idx+1, len(train_loader)))
 
             predicted_label = model(text, text.size(0))
             predicted_label = predicted_label.squeeze(1)
