@@ -18,11 +18,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #%% Model setup
 neptune_on        = True
-num_hidden_layers = 6
-size_hidden_layer = 96
-emsize            = 106
-dropout           = 0.4888
-dropout_lstm      = 0.045
+num_hidden_layers = 1
+size_hidden_layer = 87
+emsize            = 136
+dropout           = 0.207
+dropout_lstm      = 0.244
 batch_size        = 300
 learning_rate     = 0.001
 class_weights     = 1
@@ -114,7 +114,7 @@ def train(dataloader, model):
 
         if neptune_on:
             run["train/batch_idx"].log(batch_idx)
-            run["train/avg_batch_loss"].log(loss.item()) # log average loss to neptune
+            run["train/avg_batch_loss"].log(loss.item())
 
         if ((batch_idx+1) % log_interval == 0 and batch_idx > 0) or (batch_idx+1 == n_data):
             elapsed = time.time() - start_time
@@ -203,7 +203,7 @@ for epoch in range(epochs):
 
     if epoch_val_loss < best_loss:
         best_loss = epoch_val_loss
-        torch.save(model.state_dict(), 'model_weights_best_val_loss_12-16-07-15.pth')
+        torch.save(model.state_dict(), 'model_weights_best_val_loss_12-16-21-16.pth')
     
  
 
@@ -211,20 +211,24 @@ for epoch in range(epochs):
           "| Val_loss {:.4f} "
           "| Val_accuracy: {:3.2f}% |".format(epoch+1, epochs, epoch_val_loss, epoch_val_acc))
 
-torch.save(model.state_dict(), 'model_weights_12-16-07-15.pth')
+torch.save(model.state_dict(), 'model_weights_12-16-21-16.pth')
 
 if neptune_on:
     run.stop()
 
-#%%
+#%% Load model from files
+
 model = LSTMModel(vocab_size, emsize, dropout, dropout_lstm, num_hidden_layers, 
-                  size_hidden_layer, max_length, amount_of_categories).to(device) 
-model.load_state_dict(torch.load('model_weights_12-12-00-49.pth'))
-model.eval()
+                  size_hidden_layer, amount_of_categories).to(device) 
+
+
+#model.load_state_dict(torch.load('model_weights_12-15-03-48.pth'))
+#model.eval()
 
 #run.stop()
 
-#%%
+#%% Show loss plot
+
 import matplotlib.pyplot as plt
 
 plt.plot(avg_epoch_loss)
@@ -232,9 +236,7 @@ plt.ylabel("Average epoch loss")
 plt.xlabel("Epoch number")
 plt.show()
 
-
 #%% Custom input eval
-
 
 def custom_input_eval(input_string, model):
     model.eval()
@@ -266,10 +268,10 @@ tmp_ = "Body Found, Boyfriend Arrested Amid Search For Florida Woman Abducted Fr
 tmp_ = "Chile's President Signs Same-Sex Marriage Bill Into Law After Historic Vote"
 tmp_ = "Simone Biles Is Time Magazine's 2021 Athlete Of The Year"
 tmp_ = "I'm Black But Look White. Here Are The Horrible Things White People Feel Safe Telling Me."
-#tmp_ = "Body Found, Boyfriend Arrested Amid Search For Florida Woman Abducted From Work"
+tmp_ = "Body Found, Boyfriend Arrested Amid Search For Florida Woman Abducted From Work"
 tmp_ = "As Biden Talks of a Boom, Inflation and the Virus Weigh on Americans"
-#tmp_ = "The National Bank disagrees with government: there is still a need for interference in the housing market"
-#tmp_ = "Sex and The City has resurrected and the critics are not imppressed"
+tmp_ = "The National Bank disagrees with government: there is still a need for interference in the housing market"
+tmp_ = "Sex and The City has resurrected and the critics are not imppressed"
 
 print(custom_input_eval(tmp_, model))
 
